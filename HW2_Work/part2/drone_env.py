@@ -77,16 +77,24 @@ class DroneRosBridge(Node):
     def stop(self) -> None:
         self.publish_velocity(np.zeros(3, dtype=np.float32))
 
-    def reset_and_takeoff(self) -> None:
+    def reset_and_takeoff(self, takeoff_altitude: float = 0.8, timeout_sec: float = 8.0) -> None:
         self.stop()
         self.pose = None
         self.sonar_range = None
         self.reset_pub.publish(Empty())
         rclpy.spin_once(self, timeout_sec=0.5)
-        self.takeoff_pub.publish(Empty())
-        # Give the built-in controller time to leave the ground before training.
-        for _ in range(10):
+
+        deadline = time.monotonic() + timeout_sec
+        while time.monotonic() < deadline:
+            self.takeoff_pub.publish(Empty())
             rclpy.spin_once(self, timeout_sec=0.1)
+            if self.pose is not None and self.pose[2] >= takeoff_altitude:
+                self.stop()
+                return
+
+        self.get_logger().warning(
+            f"Takeoff wait timed out before reaching {takeoff_altitude:.2f} m"
+        )
 
 
 class DroneSonarAvoidEnv(gym.Env):
@@ -119,6 +127,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.xy_limit = 8.0
         self.sonar_unsafe_distance = 0.25
         self.sonar_caution_distance = 1.0
+        self.takeoff_altitude = 0.8
 
         self.step_count = 0
         self.previous_distance: float | None = None
@@ -163,8 +172,8 @@ class DroneSonarAvoidEnv(gym.Env):
         self.recent_sonar.clear()
         self.previous_sonar_range = self._safe_sonar_range()
 
-        self.ros.reset_and_takeoff()
-        self._wait_for_initial_state()
+        self.ros.reset_and_takeoff(takeoff_altitude=self.takeoff_altitude)
+        self._wait_for_initial_state(min_altitude=self.takeoff_altitude)
 
         obs = self._get_obs()
         self.previous_distance = float(obs[12])
@@ -237,11 +246,20 @@ class DroneSonarAvoidEnv(gym.Env):
         if self._owns_rclpy and rclpy.ok():
             rclpy.shutdown()
 
-    def _wait_for_initial_state(self, timeout_sec: float = 5.0) -> None:
+    def _wait_for_initial_state(
+        self,
+        timeout_sec: float = 5.0,
+        min_altitude: float | None = None,
+    ) -> None:
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
             rclpy.spin_once(self.ros, timeout_sec=0.1)
-            if self.ros.pose is not None and self.ros.sonar_range is not None:
+            pose_ready = self.ros.pose is not None
+            sonar_ready = self.ros.sonar_range is not None
+            altitude_ready = min_altitude is None or (
+                self.ros.pose is not None and self.ros.pose[2] >= min_altitude
+            )
+            if pose_ready and sonar_ready and altitude_ready:
                 return
 
     def _get_obs(self) -> np.ndarray:
