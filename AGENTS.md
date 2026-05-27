@@ -19,7 +19,7 @@ The following assignment/reference files will be placed in this repository so Co
 ```text
 Homework-files/HW2_Assignment_Intro (1).pdf
 Homework-files/HW2_NSYSU_Drone_RL_EN.pdf
-Homework-files/Github-boilercode-README.txt
+README.md
 
 
 ## Git Workflow
