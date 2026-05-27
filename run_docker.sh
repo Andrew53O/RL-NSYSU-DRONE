@@ -14,6 +14,9 @@ GPU_ID=${GPU_ID:-0}
 VNC_PORT=${VNC_PORT:-5901}
 IMAGE=${IMAGE:-nsysu_drone_vnc:iron}
 CONTAINER_NAME=${CONTAINER_NAME:-nsysu_drone_vnc}
+HW2_WORK_DIR="$PWD/HW2_Work"
+
+mkdir -p "${HW2_WORK_DIR}"
 
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     echo "Removing existing container '${CONTAINER_NAME}'..."
@@ -31,6 +34,7 @@ docker run \
     -it --rm \
     --gpus "\"device=${GPU_ID}\"" \
     -p ${VNC_PORT}:5901 \
+    -v "${HW2_WORK_DIR}:/workspace/HW2_Work" \
     --env=QT_X11_NO_MITSHM=1 \
     --privileged \
     --name="${CONTAINER_NAME}" \
