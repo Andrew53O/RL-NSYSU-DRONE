@@ -40,7 +40,7 @@ docker exec -it nsysu_drone_vnc bash
 Install RL Python dependencies once inside the container:
 
 ```bash
-python3 -m pip install gymnasium stable-baselines3 matplotlib pandas
+python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas
 ```
 
 ## Launch Gazebo/RViz

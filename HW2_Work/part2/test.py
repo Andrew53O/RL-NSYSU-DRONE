@@ -11,7 +11,7 @@ try:
 except ImportError as exc:  # pragma: no cover - helpful runtime message
     raise SystemExit(
         "Missing Stable-Baselines3. Inside the Docker container, run:\n"
-        "python3 -m pip install gymnasium stable-baselines3 matplotlib pandas"
+        'python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas'
     ) from exc
 
 from drone_env import DroneSonarAvoidEnv

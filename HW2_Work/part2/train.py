@@ -14,7 +14,7 @@ try:
 except ImportError as exc:  # pragma: no cover - helpful runtime message
     raise SystemExit(
         "Missing RL dependencies. Inside the Docker container, run:\n"
-        "python3 -m pip install gymnasium stable-baselines3 matplotlib pandas"
+        'python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas'
     ) from exc
 
 from drone_env import DroneSonarAvoidEnv
@@ -92,7 +92,7 @@ def main() -> None:
             n_steps=256 if args.smoke else 512,
             batch_size=64,
             gamma=0.99,
-            tensorboard_log=str(LOG_DIR / "tensorboard"),
+            device="cpu",
         )
         model.learn(total_timesteps=total_timesteps)
         model.save(MODEL_PATH)

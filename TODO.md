@@ -8,7 +8,7 @@ Priority: get the Part 2 RL pipeline working first. Part 1 evidence is still req
 - [x] Mount host `HW2_Work` into Docker at `/workspace/HW2_Work`.
 - [ ] Start container from host with `GPU_ID=0 ./run_docker.sh`.
 - [ ] Inside container, install RL dependencies once:
-  `python3 -m pip install gymnasium stable-baselines3 matplotlib pandas`
+  `python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas`
 - [ ] Verify `/workspace/HW2_Work` shows the host files.
 
 ## Repository inspection
