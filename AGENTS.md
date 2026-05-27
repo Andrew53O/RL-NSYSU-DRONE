@@ -24,20 +24,19 @@ Homework-files/Github-boilercode-README.txt
 
 ## Git Workflow
 
-After making meaningful changes, help me create clear Git checkpoints.
+Use Git checkpointing throughout the project.
 
-For every prompt I give, consider whether the work should be committed. If the prompt causes multiple logically separate changes, create multiple Git commits instead of one large commit.
+After each prompt, decide whether the changes should be saved as a Git checkpoint. If one prompt creates multiple logically separate changes, make multiple commits instead of one large commit.
 
 For each checkpoint:
 
-1. Run `git status` first.
+1. Run `git status`.
 2. Review the changed files.
-3. Use `git add` only for the files related to that checkpoint.
-4. Write a clear commit message that explains the purpose of the change.
-5. Commit the change.
-6. Push the commit to the remote repository.
+3. Add only the files related to that checkpoint.
+4. Commit using the Angular Conventional Commit format.
+5. Push the commit to the remote repository.
 
-Use concise commit messages, preferably in this style:
+Commit message format:
 
 ```text
-type: short description
+<type>(<scope>): <short summary>
