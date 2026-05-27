@@ -10,7 +10,7 @@
 
 set -e
 
-GPU_ID=${GPU_ID:-3}
+GPU_ID=${GPU_ID:-0}
 VNC_PORT=${VNC_PORT:-5901}
 IMAGE=${IMAGE:-nsysu_drone_vnc:iron}
 CONTAINER_NAME=${CONTAINER_NAME:-nsysu_drone_vnc}
