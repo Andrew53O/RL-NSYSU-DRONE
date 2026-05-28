@@ -202,16 +202,182 @@ This is not just "PPO flies to a target." It is PPO over a processed sonar-risk 
 
 ## Final Observation, Action, and Reward Design
 
-The final observation uses 35 normalized values. Raw sonar ranges are converted into front-sector range features, risk features, previous-range memory, trend features, recent minimum clearance, and left-right/up-down risk balances. This follows Yuan et al.'s processed sonar-state idea, Mane et al.'s short-term memory idea, Li et al.'s risk-tracking idea, and Barreto-Cubero et al.'s view that sonar should be interpreted as imperfect local proximity sectors.
+### Design Goal
 
-The action remains continuous velocity control:
+The final RL design is not a camera-based obstacle detector and not a pure waypoint follower. It is a sonar-risk-aware PPO controller. The policy receives a compact state made from position, velocity, target direction, sonar sector distances, sonar risk, recent sonar history, and obstacle-approach trend. The policy outputs continuous velocity commands, while the environment gives shaped rewards for target progress and early obstacle avoidance.
+
+This design follows the strongest repeated idea across the collected papers: sonar should be processed into useful state features before learning. Yuan et al. use processed active-sonar information rather than raw high-dimensional perception. Mane et al. add short-term obstacle memory and a safety layer because forward-looking sonar is partially observable. Li et al. track collision risk before impact rather than waiting for collision. Zhao et al. and Barreto-Cubero et al. support treating ultrasonic/sonar data as imperfect local proximity cues that should be interpreted with task context.
+
+### Observation Space
+
+The observation vector has 35 values:
+
+```text
+[
+  x/8, y/8, z/5,
+  vx, vy, vz/0.5,
+  dx_to_target/8, dy_to_target/8, dz_to_target/5,
+  distance_to_target/12,
+
+  front_left_range/10,
+  front_center_range/10,
+  front_right_range/10,
+  front_up_range/10,
+  front_down_range/10,
+
+  front_left_risk,
+  front_center_risk,
+  front_right_risk,
+  front_up_risk,
+  front_down_risk,
+
+  previous_front_left_range/10,
+  previous_front_center_range/10,
+  previous_front_right_range/10,
+  previous_front_up_range/10,
+  previous_front_down_range/10,
+
+  front_left_trend,
+  front_center_trend,
+  front_right_trend,
+  front_up_trend,
+  front_down_trend,
+
+  min_recent_front_range/10,
+  down_sonar_range/10,
+  down_sonar_risk,
+  left_right_risk_balance,
+  up_down_risk_balance
+]
+```
+
+The pose and target-vector features tell the policy where the drone is and where it should go. I normalize `x` and `y` by the safe flight boundary of 8 m, `z` by the 5 m altitude limit, and target deltas by the same scale. This keeps the observation values in a stable range for PPO and prevents position values from dominating smaller sonar-risk values. The target-vector features are important because obstacle avoidance should remain task-aware: the drone should avoid obstacles while still trying to reach the target, which follows Zhao et al.'s idea that local obstacle behavior should be interpreted with task context.
+
+The five front sonar range features represent the local obstacle layout:
+
+```text
+left, center, right, up, down
+```
+
+These are normalized by the 10 m sonar maximum range. The left/center/right sectors provide horizontal avoidance information, while the up/down sectors provide vertical avoidance information. This matters for a drone because the action includes vertical velocity. If only a center sonar existed, the agent could know that something is close but not whether climbing is a reasonable escape action. With front-up and front-down sectors, the state can support behavior such as climbing over a lower obstacle or avoiding upward movement when the upper front sector is blocked.
+
+The five front risk values convert distance into danger:
+
+```text
+risk = clip((caution_distance - range) / caution_distance, 0, 1)
+```
+
+In the current design, `caution_distance = 1.5 m`. A risk value of 0 means the sector is clear enough, while 1 means the sector is at or beyond the close-danger region. This is based on Yuan et al.'s processed sonar-state approach: PPO should not have to infer every useful safety feature from raw range alone. Risk features make the learning problem easier because the network directly receives "how dangerous is this direction?" instead of only a distance number.
+
+The previous front sonar ranges and trend features add short-term memory:
+
+```text
+trend = previous_normalized_range - current_normalized_range
+```
+
+A positive trend means the obstacle is getting closer. This is important because a single sonar reading is partially observable. The same current distance can be safe or dangerous depending on whether the drone is moving toward the obstacle or away from it. Mane et al. motivate short-term memory for sonar because limited field of view and occlusion make one-frame sensing unreliable. Li et al. motivate this from a collision-risk perspective: the controller should react to increasing risk before collision occurs.
+
+The recent minimum front range stores the closest front-sector reading over a short window. This helps represent near misses and short-term clearance history. If the drone briefly passes close to an obstacle, the policy and report metrics can still account for that risk. This follows the safety-oriented view in Mane et al. and Li et al., where minimum clearance and risk history matter, not only the final state.
+
+The downward sonar features are kept separate from the front sonar features. The original `/simple_drone/sonar/out` is treated as ground/altitude safety, not as a forward obstacle detector. This is important for honesty in the report: the drone uses added front sonar sectors for obstacle avoidance and keeps the original downward sonar for low-altitude safety. The downward risk feature helps prevent the policy from learning aggressive downward movement near the ground.
+
+The left-right and up-down risk-balance features are compact directional cues:
+
+```text
+left_right_risk_balance = front_left_risk - front_right_risk
+up_down_risk_balance = front_up_risk - front_down_risk
+```
+
+These help PPO learn avoidance direction. For example, if left risk is high and right risk is low, moving right is likely safer. If front-down risk is high and front-up risk is low, climbing may be safer. This is similar in spirit to Barreto-Cubero et al.'s sensor-fusion/local-mapping idea: individual range readings become an interpreted local spatial structure.
+
+### Action Space
+
+The action is a continuous 3D velocity command:
 
 ```text
 [vx_cmd, vy_cmd, vz_cmd]
 ```
 
-This is intentionally simple. The five front sonar sectors make vertical motion meaningful, because PPO can learn to climb when center or front-down sonar risk is high.
+The limits are:
 
-The reward combines progress to the goal, distance penalty, mean and maximum front-sonar risk penalties, approach-trend penalty, downward-sonar risk penalty, action magnitude penalty, action-smoothness penalty, success bonus, and terminal safety penalties. This makes obstacle avoidance part of every step, not only a final collision event.
+```text
+vx_cmd: [-1.0, 1.0]
+vy_cmd: [-1.0, 1.0]
+vz_cmd: [-0.5, 0.5]
+```
 
-The safety filter is emergency-only. If front sonar is dangerously close, it limits forward motion and pushes backward/upward. If downward sonar is too close to the ground, it forces upward motion. This is consistent with Mane et al.'s safety-filtering idea while still keeping PPO as the main controller.
+This action space is intentionally simple because the simulator already has a lower-level drone controller that converts velocity commands into motion. PPO does not need to output motor forces or attitude commands. It only needs to choose the desired motion direction. This makes the MDP easier to train within the homework deadline.
+
+The action design is also matched to the sonar design. The horizontal front sectors support `vy_cmd` decisions because the policy can choose left or right depending on which side is safer. The vertical front sectors support `vz_cmd` decisions because the policy can choose to climb or descend depending on whether the obstacle risk is higher above or below. The center front sector supports `vx_cmd` decisions because the policy should slow down or stop moving forward when an obstacle is directly ahead.
+
+### Reward Function
+
+The reward is shaped as:
+
+```text
+reward =
+  5.0 * progress_reward
+  - 0.02 * distance_to_target
+  - 2.0 * mean_front_risk^2
+  - 4.0 * max_front_risk^2
+  - 1.5 * max_front_approach_trend
+  - 1.0 * down_sonar_risk^2
+  - 0.01 * norm(action)
+  - 0.02 * norm(action - previous_action)
+  - 0.25 * safety_filter_used
+  + success_or_failure_terms
+```
+
+The progress reward is:
+
+```text
+progress_reward = previous_distance_to_target - current_distance_to_target
+```
+
+This term rewards the drone for moving closer to the target at each step. Without this term, PPO may only receive sparse success or crash information, which is difficult to learn from. The distance penalty keeps the drone goal-directed even when progress is small. Together, these terms define the navigation part of the task.
+
+The mean front-risk penalty discourages flying through generally cluttered or risky areas. The maximum front-risk penalty is stronger because one very close obstacle is dangerous even if other sectors are clear. This makes the drone care about both overall local risk and the single most dangerous direction. Yuan et al. support this kind of shaped obstacle-avoidance reward because their RL formulation combines path planning with obstacle safety.
+
+The approach-trend penalty is the most direct connection to Li et al. A collision is not only about current distance; it is also about whether the relative state is becoming more dangerous. If the sonar range is decreasing, the drone is approaching an obstacle, so the reward penalizes that trend before the unsafe threshold is crossed. This encourages proactive avoidance rather than late emergency reactions.
+
+The downward-sonar risk penalty discourages unsafe altitude behavior near the ground. This is separate from front obstacle avoidance because the original sonar is downward-facing. It helps keep the drone from solving obstacle avoidance by diving toward the floor.
+
+The action magnitude penalty discourages unnecessarily large velocity commands. The action-smoothness penalty discourages jittery behavior by penalizing large changes from the previous command. Smoothness is important for a drone because rapidly changing commands can cause unstable or visually poor motion in Gazebo. It also makes the learned controller easier to compare with classical control in the final reflection.
+
+The safety-filter penalty is small. It does not punish the agent as strongly as a crash, but it tells PPO that relying on the emergency filter is not ideal. The filter should be a last layer of protection, not the main controller. This matches Mane et al.'s safety-filtering idea: the learned or reactive controller proposes an action, and a safety layer prevents clearly dangerous commands.
+
+### Termination and Safety
+
+The episode ends with success when:
+
+```text
+distance_to_target < 0.4 m
+```
+
+The episode terminates as unsafe when:
+
+```text
+min_front_sonar_range < 0.25 m
+down_sonar_range < 0.25 m
+z < 0.25 m
+abs(x) > 8 m
+abs(y) > 8 m
+z > 5 m
+sensor state is invalid
+```
+
+Timeout occurs after the maximum step count. Success gives a positive terminal bonus, while unsafe termination gives a large negative penalty. These conditions make the safety constraints explicit rather than leaving the policy to discover every boundary from reward shaping alone.
+
+The emergency safety filter modifies the PPO action before publishing it only in clearly dangerous cases. If front sonar is dangerously close, it limits forward motion and pushes backward/upward. If the downward sonar is too close to the ground, it forces upward motion. This is important for a real robot-style argument: learned policies can make mistakes, so a small safety layer is reasonable for obstacle avoidance. Mane et al. is the strongest support for this design choice because their sonar obstacle-avoidance system combines reactive planning with a safety layer.
+
+### Paper-To-Design Mapping
+
+| Paper | Design choice supported |
+|---|---|
+| Yuan et al., 2021 | Use processed sonar range/risk features as the RL state instead of raw camera or raw unstructured sensing. |
+| Mane et al., 2024 | Add previous sonar, recent minimum sonar, and an emergency safety filter for partial observability and safety. |
+| Li et al., 2024 | Penalize increasing obstacle risk using sonar trend, not only final collision. |
+| Zhao et al., 2021 | Combine obstacle cues with target direction so avoidance remains task-aware. |
+| Barreto-Cubero et al., 2022 | Treat multiple range sectors as an interpreted local proximity structure, similar to lightweight sensor fusion/local mapping. |
+
+In summary, the controller is designed as PPO over a processed sonar-risk state. The observation gives the policy enough information to decide where the target is, where obstacles are, whether risk is increasing, and which avoidance direction is safer. The action space stays simple by using velocity commands. The reward encourages goal progress while penalizing unsafe proximity, increasing collision risk, ground risk, and unstable commands. This makes the design appropriate for the homework because it is sonar-based, explainable, trainable within the deadline, and directly connected to the collected literature.
