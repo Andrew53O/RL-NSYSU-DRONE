@@ -7,8 +7,8 @@ This file intentionally keeps the RL interface small:
 - reward: target progress with sonar risk, trend, smoothness, and safety penalties
 
 The original simulator publishes one downward Range message. For Task D, this
-workspace adds five forward sonar sectors and treats the downward sonar as a
-separate altitude/proximity safety cue.
+workspace adds forward and side sonar sectors and treats the downward sonar as
+a separate altitude/proximity safety cue.
 """
 
 from __future__ import annotations
@@ -45,6 +45,10 @@ class DroneRosBridge(Node):
             "up": None,
             "down": None,
         }
+        self.side_sonar_ranges: dict[str, float | None] = {
+            "left": None,
+            "right": None,
+        }
         self.sonar_min_range = 0.02
         self.sonar_max_range = 10.0
         self.last_pose_time: float | None = None
@@ -70,6 +74,12 @@ class DroneRosBridge(Node):
         )
         self.create_subscription(
             Range, f"{ns}/front_sonar_down/out", self._front_sonar_cb("down"), 10
+        )
+        self.create_subscription(
+            Range, f"{ns}/side_sonar_left/out", self._side_sonar_cb("left"), 10
+        )
+        self.create_subscription(
+            Range, f"{ns}/side_sonar_right/out", self._side_sonar_cb("right"), 10
         )
 
     def _pose_cb(self, msg: Pose) -> None:
@@ -98,6 +108,14 @@ class DroneRosBridge(Node):
 
         return callback
 
+    def _side_sonar_cb(self, sector: str):
+        def callback(msg: Range) -> None:
+            self.sonar_min_range = float(msg.min_range)
+            self.sonar_max_range = float(msg.max_range)
+            self.side_sonar_ranges[sector] = float(msg.range)
+
+        return callback
+
     def publish_velocity(self, action: np.ndarray) -> None:
         msg = Twist()
         msg.linear.x = float(action[0])
@@ -114,6 +132,8 @@ class DroneRosBridge(Node):
         self.down_sonar_range = None
         for sector in self.front_sonar_ranges:
             self.front_sonar_ranges[sector] = None
+        for sector in self.side_sonar_ranges:
+            self.side_sonar_ranges[sector] = None
         self.reset_pub.publish(Empty())
         rclpy.spin_once(self, timeout_sec=0.5)
 
