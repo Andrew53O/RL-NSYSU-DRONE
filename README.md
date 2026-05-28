@@ -122,6 +122,13 @@ The namespace is `/simple_drone` by default (configurable, see [Configure Plugin
 | `~/front/image_raw` | `sensor_msgs/msg/Image` |
 | `~/bottom/image_raw` | `sensor_msgs/msg/Image` |
 | `~/sonar/out` | `sensor_msgs/msg/Range` |
+| `~/front_sonar_left/out` | `sensor_msgs/msg/Range` |
+| `~/front_sonar_center/out` | `sensor_msgs/msg/Range` |
+| `~/front_sonar_right/out` | `sensor_msgs/msg/Range` |
+| `~/front_sonar_up/out` | `sensor_msgs/msg/Range` |
+| `~/front_sonar_down/out` | `sensor_msgs/msg/Range` |
+| `~/side_sonar_left/out` | `sensor_msgs/msg/Range` |
+| `~/side_sonar_right/out` | `sensor_msgs/msg/Range` |
 | `~/imu/out` | `sensor_msgs/msg/Imu` |
 | `~/gps/nav` | `sensor_msgs/msg/NavSatFix` |
 | `~/gps/vel` | `geometry_msgs/msg/TwistStamped` |
@@ -173,6 +180,34 @@ ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist \
 
 # Reset
 ros2 topic pub /simple_drone/reset std_msgs/msg/Empty {} --once
+```
+
+# Task D Sonar RL Validation
+
+After changing the drone xacro/URDF, rebuild inside Docker:
+
+```bash
+cd /ros2_ws
+colcon build --symlink-install --packages-select nsysu_drone_description nsysu_drone_bringup nsysu_drone_control
+source install/setup.bash
+launch_drone
+```
+
+In a second Docker shell:
+
+```bash
+source /ros2_ws/install/setup.bash
+ros2 topic list | grep sonar
+ros2 topic echo --once /simple_drone/side_sonar_left/out
+ros2 topic echo --once /simple_drone/side_sonar_right/out
+cd /workspace/HW2_Work/part2
+python3 -m py_compile drone_env.py train.py test.py
+python3 train.py --smoke --stage 1
+python3 train.py --stage 1 --timesteps 50000
+python3 train.py --stage 2 --timesteps 50000
+python3 train.py --stage 3 --timesteps 50000
+python3 train.py --stage 4 --timesteps 50000
+python3 test.py --episodes 5 --csv logs/eval_metrics.csv
 ```
 
 

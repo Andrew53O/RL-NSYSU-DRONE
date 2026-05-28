@@ -143,7 +143,7 @@ Why `"numpy<2"`:
 - Some installed compiled packages, especially OpenCV/CV2 dependencies, may not work cleanly with NumPy 2 inside this container.
 - Pinning NumPy below 2 avoids the `_ARRAY_API not found` warning/crash path.
 
-## 6. Verify Six Sonar Topics
+## 6. Verify Eight Sonar Topics
 
 Inside Docker terminal 2:
 
@@ -160,6 +160,8 @@ Expected sonar topics:
 /simple_drone/front_sonar_right/out
 /simple_drone/front_sonar_up/out
 /simple_drone/front_sonar_down/out
+/simple_drone/side_sonar_left/out
+/simple_drone/side_sonar_right/out
 ```
 
 Echo each topic once:
@@ -171,6 +173,8 @@ ros2 topic echo --once /simple_drone/front_sonar_center/out
 ros2 topic echo --once /simple_drone/front_sonar_right/out
 ros2 topic echo --once /simple_drone/front_sonar_up/out
 ros2 topic echo --once /simple_drone/front_sonar_down/out
+ros2 topic echo --once /simple_drone/side_sonar_left/out
+ros2 topic echo --once /simple_drone/side_sonar_right/out
 ```
 
 If any front sonar topic is missing:
@@ -228,14 +232,16 @@ In Docker terminal 2:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 train.py --smoke
+python3 -m py_compile drone_env.py train.py test.py
+python3 train.py --smoke --stage 1
 ```
 
 Expected outputs:
 
 ```text
 /workspace/HW2_Work/part2/models/ppo_drone.zip
-/workspace/HW2_Work/part2/logs/training_curve.png
+/workspace/HW2_Work/part2/models/ppo_drone_stage1.zip
+/workspace/HW2_Work/part2/logs/training_curve_stage1.png
 ```
 
 A smoke run only proves the pipeline works. It does not prove good obstacle avoidance yet.
@@ -246,18 +252,20 @@ Inside Docker terminal 2:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 test.py
+python3 test.py --episodes 5 --csv logs/eval_metrics.csv
 ```
 
 Expected printed fields:
 
 ```text
-status: ...
-final_distance_to_target: ...
-minimum_front_sonar_range: ...
-minimum_down_sonar_range: ...
-safety_filter_overrides: ...
-total_episode_reward: ...
+episodes: ...
+success_rate: ...
+crash_rate: ...
+timeout_rate: ...
+average_return: ...
+average_minimum_obstacle_sonar_distance: ...
+safety_filter_activation_count: ...
+side_sonar_near_miss_count: ...
 ```
 
 Useful interpretation:
@@ -265,6 +273,7 @@ Useful interpretation:
 - `success`: reached the target.
 - `timeout`: did not reach target in time.
 - `unsafe_front_sonar`: obstacle got too close.
+- `unsafe_side_sonar`: side wall or side obstacle got too close.
 - `unsafe_down_sonar` or `crash`: flew too low.
 - `out_of_bounds`: left the safe flight area.
 - Many `safety_filter_overrides` means PPO is still choosing risky actions.
@@ -275,13 +284,16 @@ Run this after smoke training works:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 train.py --timesteps 50000
+python3 train.py --stage 1 --timesteps 50000
+python3 train.py --stage 2 --timesteps 50000
+python3 train.py --stage 3 --timesteps 50000
+python3 train.py --stage 4 --timesteps 50000
 ```
 
 For a better final result, try:
 
 ```bash
-python3 train.py --timesteps 100000
+python3 train.py --stage 4 --timesteps 100000
 ```
 
 Training is slow because Gazebo is the environment. A longer run is more meaningful than a smoke run.
@@ -298,19 +310,22 @@ ros2 topic list | grep sonar
 ros2 topic echo --once /simple_drone/front_sonar_center/out
 ros2 topic echo --once /simple_drone/front_sonar_up/out
 ros2 topic echo --once /simple_drone/front_sonar_down/out
+ros2 topic echo --once /simple_drone/side_sonar_left/out
+ros2 topic echo --once /simple_drone/side_sonar_right/out
 ```
 
 Also save:
 
 ```text
-HW2_Work/part2/logs/training_curve.png
+HW2_Work/part2/logs/training_curve_stage4.png
+HW2_Work/part2/logs/eval_metrics.csv
 ```
 
 Run final test and copy the printed result into the report:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 test.py
+python3 test.py --episodes 5 --csv logs/eval_metrics.csv
 ```
 
 ## 12. Part 1 Evidence If Time Allows

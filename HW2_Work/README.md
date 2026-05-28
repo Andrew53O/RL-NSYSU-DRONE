@@ -72,21 +72,25 @@ In a second container shell:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 train.py --smoke
+python3 train.py --smoke --stage 1
 ```
 
 If the smoke test works, run longer training:
 
 ```bash
-python3 train.py --timesteps 50000
+python3 train.py --stage 1 --timesteps 50000
+python3 train.py --stage 2 --timesteps 50000
+python3 train.py --stage 3 --timesteps 50000
+python3 train.py --stage 4 --timesteps 50000
 ```
 
 Expected outputs:
 
 ```text
 HW2_Work/part2/models/ppo_drone.zip
-HW2_Work/part2/logs/monitor.csv
-HW2_Work/part2/logs/training_curve.png
+HW2_Work/part2/models/ppo_drone_stage1.zip
+HW2_Work/part2/logs/monitor_stage1.csv
+HW2_Work/part2/logs/training_curve_stage1.png
 ```
 
 ## Test
@@ -95,17 +99,18 @@ With Gazebo still running:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 test.py
+python3 test.py --episodes 5 --csv logs/eval_metrics.csv
 ```
 
 The test script prints:
 
-- status: success, timeout, crash, out_of_bounds, unsafe_front_sonar, unsafe_down_sonar, or invalid_sensor
-- final distance to target
-- minimum front sonar range
-- minimum downward sonar range
-- safety filter override count
-- total episode reward
+- success, crash, and timeout rates
+- average return
+- average minimum obstacle sonar distance
+- average steps to target
+- safety filter activation count
+- side sonar near-miss count
+- per-episode CSV rows in `logs/eval_metrics.csv`
 
 ## ROS Topics
 
@@ -124,6 +129,23 @@ The environment uses:
 | `/simple_drone/front_sonar_right/out` | `sensor_msgs/Range` | Right-front obstacle cue |
 | `/simple_drone/front_sonar_up/out` | `sensor_msgs/Range` | Upward-pitched front obstacle cue |
 | `/simple_drone/front_sonar_down/out` | `sensor_msgs/Range` | Downward-pitched front obstacle cue |
+| `/simple_drone/side_sonar_left/out` | `sensor_msgs/Range` | Left side-wall obstacle cue |
+| `/simple_drone/side_sonar_right/out` | `sensor_msgs/Range` | Right side-wall obstacle cue |
+
+Verify all sonar topics after rebuilding and launching Gazebo:
+
+```bash
+ros2 topic list | grep sonar
+ros2 topic echo --once /simple_drone/side_sonar_left/out
+ros2 topic echo --once /simple_drone/side_sonar_right/out
+```
+
+Run a local syntax smoke check before container training:
+
+```bash
+cd /workspace/HW2_Work/part2
+python3 -m py_compile drone_env.py train.py test.py
+```
 
 ## Design Notes
 
@@ -136,21 +158,23 @@ Observation vector:
  distance_to_target/12,
  front_left_range/10, front_center_range/10, front_right_range/10,
  front_up_range/10, front_down_range/10,
+ side_left_range/10, side_right_range/10,
  front_left_risk, front_center_risk, front_right_risk,
- front_up_risk, front_down_risk,
+ front_up_risk, front_down_risk, side_left_risk, side_right_risk,
  previous_front_left_range/10, previous_front_center_range/10,
  previous_front_right_range/10, previous_front_up_range/10,
- previous_front_down_range/10,
+ previous_front_down_range/10, previous_side_left_range/10,
+ previous_side_right_range/10,
  front_left_trend, front_center_trend, front_right_trend,
- front_up_trend, front_down_trend,
- min_recent_front_range/10,
+ front_up_trend, front_down_trend, side_left_trend, side_right_trend,
+ min_recent_obstacle_range/10,
  down_sonar_range/10,
  down_sonar_risk,
  left_right_risk_balance,
  up_down_risk_balance]
 ```
 
-The observation has 35 values. Sonar risk is computed from the caution distance, so `0` means clear and `1` means close/unsafe.
+The observation has 43 values. Sonar risk is computed from the caution distance, so `0` means clear and `1` means close/unsafe.
 
 Action vector:
 
@@ -170,8 +194,8 @@ Reward terms:
 
 - weighted progress toward target
 - distance-to-target penalty
-- mean and maximum front-sonar risk penalties
-- front-sonar approach-trend penalty
+- mean and maximum obstacle-sonar risk penalties
+- obstacle-sonar approach-trend penalty
 - downward-sonar risk penalty
 - action magnitude and action-smoothness penalties
 - small penalty when the emergency safety filter overrides an action
@@ -189,10 +213,10 @@ Termination conditions:
 
 ## Sonar Limitation
 
-The stock simulator originally provided a single downward `sensor_msgs/Range` sonar output. For Task D, this workspace uses six total sonar sensors: one downward safety sonar plus five front-facing sectors. The front sectors distinguish left, center, right, upward-pitched, and downward-pitched obstacle risk.
+The stock simulator originally provided a single downward `sensor_msgs/Range` sonar output. For Task D, this workspace uses eight total sonar sensors: one downward safety sonar, five front-facing sectors, and two side-facing sectors. The front sectors distinguish left, center, right, upward-pitched, and downward-pitched obstacle risk. The side sectors reduce the wall-observability blind spot during lateral motion.
 
 The vertical front sectors are important because the PPO action includes `vz_cmd`. If the center or lower front sonar reports danger, the policy has state information that can support climbing behavior instead of only steering left or right.
 
-The learned PPO action is treated as a nominal command. A small emergency safety filter slows or redirects commands when front sonar is dangerously close or the downward sonar is too near the ground.
+The learned PPO action is treated as a nominal command. A small emergency safety filter slows or redirects commands when front sonar is dangerously close, a side sonar is near a wall, or the downward sonar is too near the ground.
 
 The literature notes in `Homework-files/papers/literature_design_notes.md` support this design choice: process sonar into risk features, add short-term memory, and keep explicit safety logic around the learned policy.
