@@ -191,7 +191,7 @@ def main() -> None:
     # Longer training should use --timesteps 50000 or more.
     total_timesteps = 1_000 if args.smoke else args.timesteps
     model_path = MODEL_DIR / f"ppo_drone_stage{args.stage}.zip"
-    monitor_path = LOG_DIR / f"monitor_stage{args.stage}.csv"
+    monitor_path = LOG_DIR / f"stage{args.stage}.monitor.csv"
     curve_path = LOG_DIR / f"training_curve_stage{args.stage}.png"
 
     # These folders live in the mounted HW2_Work directory, so models/logs
