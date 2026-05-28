@@ -8,13 +8,19 @@ However, do not begin with many obstacles. A cluttered world makes early learnin
 
 ## Important Sonar Limitation
 
-The current simulator publishes sonar on:
+The original simulator publishes downward sonar on:
 
 ```text
 /simple_drone/sonar/out
 ```
 
-This is a `sensor_msgs/Range` topic. In the stock drone model, this sonar may behave more like a downward or coarse proximity sensor, not a full forward-facing obstacle detector.
+This is a `sensor_msgs/Range` topic. In the stock drone model, this sonar behaves like a downward/coarse proximity sensor, not a full forward-facing obstacle detector. For the Task D design, we add three forward sonar sectors:
+
+```text
+/simple_drone/front_sonar_left/out
+/simple_drone/front_sonar_center/out
+/simple_drone/front_sonar_right/out
+```
 
 Before claiming strong obstacle avoidance, verify whether the sonar range changes near cones or walls.
 
@@ -26,12 +32,12 @@ ros2 topic echo /simple_drone/sonar/out
 
 Then move the drone near obstacles using teleop or velocity commands. Watch whether the `range` value changes.
 
-If the sonar changes near obstacles, the current setup can support real sonar-based obstacle avoidance.
+If the front sonar ranges change near obstacles, the setup can support real sonar-based obstacle avoidance.
 
-If the sonar only changes with altitude or ground distance, then adding more cones in front will not help much. In that case, document the limitation and either:
+If only the downward sonar changes with altitude or ground distance, then adding more cones in front will not help much. In that case, document the limitation and either:
 
-- treat sonar as a safety/proximity cue, or
-- modify the URDF/Xacro to add a forward-facing sonar/ray sensor.
+- treat downward sonar as a safety/proximity cue, or
+- use the added front sonar sectors for obstacle avoidance.
 
 ## Curriculum For Training
 
@@ -74,12 +80,12 @@ Success criteria:
 
 ### Stage 2: Sonar Behavior Check
 
-Goal: prove whether `/simple_drone/sonar/out` can detect obstacle proximity.
+Goal: prove whether the front sonar topics can detect obstacle proximity.
 
 Run:
 
 ```bash
-ros2 topic echo /simple_drone/sonar/out
+ros2 topic echo /simple_drone/front_sonar_center/out
 ```
 
 Then move the drone:
@@ -93,11 +99,11 @@ Record observations:
 
 | Situation | Expected useful sonar behavior |
 |---|---|
-| Near obstacle | `range` decreases |
-| Away from obstacle | `range` increases |
-| Near ground only | `range` may represent altitude/ground clearance |
+| Near obstacle in front | front sonar `range` decreases |
+| Away from obstacle | front sonar `range` increases |
+| Near ground only | downward sonar may represent altitude/ground clearance |
 
-If the sonar does not react to forward obstacles, use this as a report limitation.
+If the front sonar does not react to forward obstacles, use this as a report limitation.
 
 ### Stage 3: One-Obstacle Task
 
@@ -180,7 +186,7 @@ Therefore, the planned algorithm is:
 
 ```text
 PPO policy
-  input: pose, velocity, target vector, sonar range, previous sonar, recent minimum sonar
+  input: pose, velocity, target vector, downward sonar, front-left/center/right sonar, previous front sonar, recent minimum front sonar
   output: continuous velocity command
   reward: target progress - distance/action/sonar-risk penalties + success/crash terms
   safety: terminate or strongly penalize unsafe sonar, low altitude, out of bounds, invalid sensor state

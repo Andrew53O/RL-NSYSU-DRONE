@@ -87,9 +87,10 @@ python3 test.py
 
 The test script prints:
 
-- status: success, timeout, crash, out_of_bounds, unsafe_sonar, or invalid_sensor
+- status: success, timeout, crash, out_of_bounds, unsafe_front_sonar, unsafe_down_sonar, or invalid_sensor
 - final distance to target
-- minimum sonar range
+- minimum front sonar range
+- minimum downward sonar range
 - total episode reward
 
 ## ROS Topics
@@ -103,7 +104,10 @@ The environment uses:
 | `/simple_drone/gt_vel` | `geometry_msgs/Twist` | Velocity observation |
 | `/simple_drone/takeoff` | `std_msgs/Empty` | Takeoff after reset |
 | `/simple_drone/reset` | `std_msgs/Empty` | Episode reset |
-| `/simple_drone/sonar/out` | `sensor_msgs/Range` | Sonar proximity/safety cue |
+| `/simple_drone/sonar/out` | `sensor_msgs/Range` | Downward sonar, altitude/ground safety cue |
+| `/simple_drone/front_sonar_left/out` | `sensor_msgs/Range` | Left-front obstacle cue |
+| `/simple_drone/front_sonar_center/out` | `sensor_msgs/Range` | Center-front obstacle cue |
+| `/simple_drone/front_sonar_right/out` | `sensor_msgs/Range` | Right-front obstacle cue |
 
 ## Design Notes
 
@@ -115,9 +119,11 @@ Observation vector:
  target_x, target_y, target_z,
  dx_to_target, dy_to_target, dz_to_target,
  distance_to_target,
- sonar_range,
- previous_sonar_range,
- min_recent_sonar_range]
+ down_sonar_range,
+ front_sonar_left, front_sonar_center, front_sonar_right,
+ previous_front_left, previous_front_center, previous_front_right,
+ min_recent_front_sonar_range,
+ front_risk_trend]
 ```
 
 Action vector:
@@ -154,6 +160,6 @@ Termination conditions:
 
 ## Sonar Limitation
 
-The stock simulator provides a single `sensor_msgs/Range` sonar output. In the current URDF/Xacro it is best treated as a coarse proximity/safety cue rather than a complete forward obstacle map. The PPO environment still uses sonar features and sonar penalties, but navigation mainly depends on ground-truth pose, velocity, and target vector.
+The stock simulator originally provided a single downward `sensor_msgs/Range` sonar output. For Task D, this workspace adds three forward-facing sonar sectors so the policy can distinguish left, center, and right obstacle risk.
 
-This limitation should be documented in the report. The literature notes in `Homework-files/papers/literature_design_notes.md` support this design choice: process sonar into risk features, add short-term memory, and keep explicit safety logic around the learned policy.
+The literature notes in `Homework-files/papers/literature_design_notes.md` support this design choice: process sonar into risk features, add short-term memory, and keep explicit safety logic around the learned policy.

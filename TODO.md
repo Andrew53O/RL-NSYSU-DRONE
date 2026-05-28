@@ -18,7 +18,8 @@ Priority: get the Part 2 RL pipeline working first. Part 1 evidence is still req
 - [x] Inspect `README.md`.
 - [x] Inspect `fly_straight.py` and `rl_fly_to_target.py`.
 - [x] Inspect launch files, `drone.yaml`, URDF/Xacro, and world file.
-- [x] Confirm sonar topic is `/simple_drone/sonar/out`.
+- [x] Confirm original sonar topic is `/simple_drone/sonar/out`.
+- [ ] Confirm added front sonar topics after ROS rebuild.
 
 ## Part 2 environment implementation
 

@@ -38,25 +38,39 @@ def main() -> None:
     model = PPO.load(args.model)
 
     total_reward = 0.0
-    min_sonar = float("inf")
+    min_front_sonar = float("inf")
+    min_down_sonar = float("inf")
     status = "running"
 
     try:
         obs, info = env.reset()
-        min_sonar = min(min_sonar, float(info["sonar_range"]))
+        min_front_sonar = min(
+            min_front_sonar,
+            float(info["front_sonar_left"]),
+            float(info["front_sonar_center"]),
+            float(info["front_sonar_right"]),
+        )
+        min_down_sonar = min(min_down_sonar, float(info["down_sonar_range"]))
 
         for _ in range(args.max_steps):
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, info = env.step(action)
             total_reward += float(reward)
-            min_sonar = min(min_sonar, float(info["sonar_range"]))
+            min_front_sonar = min(
+                min_front_sonar,
+                float(info["front_sonar_left"]),
+                float(info["front_sonar_center"]),
+                float(info["front_sonar_right"]),
+            )
+            min_down_sonar = min(min_down_sonar, float(info["down_sonar_range"]))
             status = str(info["status"])
             if terminated or truncated:
                 break
 
         print(f"status: {status}")
         print(f"final_distance_to_target: {info['distance_to_target']:.3f}")
-        print(f"minimum_sonar_range: {min_sonar:.3f}")
+        print(f"minimum_front_sonar_range: {min_front_sonar:.3f}")
+        print(f"minimum_down_sonar_range: {min_down_sonar:.3f}")
         print(f"total_episode_reward: {total_reward:.3f}")
     finally:
         env.close()
