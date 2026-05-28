@@ -34,7 +34,6 @@ For each checkpoint:
 2. Review the changed files.
 3. Add only the files related to that checkpoint.
 4. Commit using the Angular Conventional Commit format.
-5. Push the commit to the remote repository.
 
 Commit message format:
 
