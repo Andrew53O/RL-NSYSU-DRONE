@@ -35,7 +35,7 @@ def main() -> None:
         raise SystemExit(f"Model not found: {args.model}")
 
     env = DroneSonarAvoidEnv(target=tuple(args.target), max_steps=args.max_steps)
-    model = PPO.load(args.model)
+    model = PPO.load(args.model, device="cpu")
 
     total_reward = 0.0
     min_front_sonar = float("inf")
