@@ -272,9 +272,11 @@ class DroneSonarAvoidEnv(gym.Env):
         current_distance = float(info["distance_to_target"])
         down_sonar_range = float(info["down_sonar_range"])
         min_front_range = float(info["min_front_sonar_range"])
-        mean_front_risk = float(info["mean_front_risk"])
-        max_front_risk = float(info["max_front_risk"])
-        max_approach_trend = max(0.0, float(info["max_front_approach_trend"]))
+        side_left_range = float(info["side_sonar_left"])
+        side_right_range = float(info["side_sonar_right"])
+        obstacle_mean_risk = float(info["obstacle_mean_risk"])
+        obstacle_max_risk = float(info["obstacle_max_risk"])
+        max_approach_trend = max(0.0, float(info["max_obstacle_approach_trend"]))
         down_sonar_risk = float(info["down_sonar_risk"])
         x_pos = float(info["x"])
         y_pos = float(info["y"])
@@ -287,8 +289,8 @@ class DroneSonarAvoidEnv(gym.Env):
         self.previous_distance = current_distance
 
         distance_penalty = 0.02 * reward_distance
-        mean_risk_penalty = 2.0 * mean_front_risk**2
-        max_risk_penalty = 4.0 * max_front_risk**2
+        mean_risk_penalty = 2.0 * obstacle_mean_risk**2
+        max_risk_penalty = 4.0 * obstacle_max_risk**2
         trend_penalty = 1.5 * max_approach_trend
         down_risk_penalty = 1.0 * down_sonar_risk**2
         action_penalty = 0.01 * float(np.linalg.norm(filtered_action))
@@ -332,6 +334,13 @@ class DroneSonarAvoidEnv(gym.Env):
             reward -= 50.0
             terminated = True
             status = "unsafe_front_sonar"
+        elif (
+            side_left_range < self.sonar_unsafe_distance
+            or side_right_range < self.sonar_unsafe_distance
+        ):
+            reward -= 50.0
+            terminated = True
+            status = "unsafe_side_sonar"
         elif down_sonar_range < self.sonar_unsafe_distance:
             reward -= 50.0
             terminated = True
