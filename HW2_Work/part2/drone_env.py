@@ -193,6 +193,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.xy_limit = 8.0
         self.sonar_unsafe_distance = 0.25
         self.down_sonar_lift_distance = 0.35
+        self.side_sonar_push_distance = 0.45
         self.sonar_caution_distance = 1.5
         self.takeoff_altitude = 0.8
         self.max_sonar_range = 10.0
@@ -533,8 +534,11 @@ class DroneSonarAvoidEnv(gym.Env):
     def _apply_safety_filter(self, action: np.ndarray) -> tuple[np.ndarray, bool]:
         filtered = action.copy()
         front_sonar = self._safe_front_sonar_ranges()
+        side_sonar = self._safe_side_sonar_ranges()
         front_risk = self._ranges_to_risk(front_sonar)
         min_front = float(np.min(front_sonar))
+        side_left_range = float(side_sonar[0])
+        side_right_range = float(side_sonar[1])
         down_sonar_range = self._safe_sonar_range(self.ros.down_sonar_range)
         was_filtered = False
 
@@ -548,6 +552,20 @@ class DroneSonarAvoidEnv(gym.Env):
 
         if down_sonar_range < self.down_sonar_lift_distance:
             filtered[2] = max(filtered[2], 0.2)
+            was_filtered = True
+
+        left_too_close = side_left_range < self.side_sonar_push_distance
+        right_too_close = side_right_range < self.side_sonar_push_distance
+        if left_too_close and right_too_close:
+            filtered[1] = 0.0
+            was_filtered = True
+        elif left_too_close:
+            # Teleop uses +y for left and -y for right, so push right.
+            filtered[1] = min(filtered[1], -0.2)
+            was_filtered = True
+        elif right_too_close:
+            # Teleop uses +y for left and -y for right, so push left.
+            filtered[1] = max(filtered[1], 0.2)
             was_filtered = True
 
         return np.clip(filtered, self.action_space.low, self.action_space.high), was_filtered
