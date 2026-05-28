@@ -29,7 +29,20 @@ This mounts:
 
 ```text
 ~/HW2/nsysu_drone/HW2_Work -> /workspace/HW2_Work
+~/HW2/nsysu_drone/nsysu_drone_description -> /ros2_ws/src/nsysu_drone_description
+~/HW2/nsysu_drone/nsysu_drone_bringup -> /ros2_ws/src/nsysu_drone_bringup
+~/HW2/nsysu_drone/nsysu_drone_control -> /ros2_ws/src/nsysu_drone_control
 ```
+
+Because the ROS source packages are mounted, you do not need `docker cp` after editing package files on the host. If you edit URDF/Xacro, launch files, package files, or C++ code, rebuild the ROS workspace inside Docker:
+
+```bash
+cd /ros2_ws
+colcon build --symlink-install --packages-select nsysu_drone_description nsysu_drone_bringup nsysu_drone_control
+source install/setup.bash
+```
+
+For pure `HW2_Work/part2/*.py` edits, no ROS rebuild is needed.
 
 Open another shell into the container:
 

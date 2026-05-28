@@ -15,6 +15,9 @@ VNC_PORT=${VNC_PORT:-5901}
 IMAGE=${IMAGE:-nsysu_drone_vnc:iron}
 CONTAINER_NAME=${CONTAINER_NAME:-nsysu_drone_vnc}
 HW2_WORK_DIR="$PWD/HW2_Work"
+DESCRIPTION_DIR="$PWD/nsysu_drone_description"
+BRINGUP_DIR="$PWD/nsysu_drone_bringup"
+CONTROL_DIR="$PWD/nsysu_drone_control"
 
 mkdir -p "${HW2_WORK_DIR}"
 
@@ -28,6 +31,8 @@ echo " Launching ${CONTAINER_NAME}"
 echo "   Image     : ${IMAGE}"
 echo "   GPU       : ${GPU_ID}"
 echo "   VNC port  : ${VNC_PORT} (host) -> 5901 (container)"
+echo "   HW2_Work  : ${HW2_WORK_DIR} -> /workspace/HW2_Work"
+echo "   ROS src   : host packages mounted into /ros2_ws/src"
 echo "=================================================="
 
 docker run \
@@ -35,6 +40,9 @@ docker run \
     --gpus "\"device=${GPU_ID}\"" \
     -p ${VNC_PORT}:5901 \
     -v "${HW2_WORK_DIR}:/workspace/HW2_Work" \
+    -v "${DESCRIPTION_DIR}:/ros2_ws/src/nsysu_drone_description" \
+    -v "${BRINGUP_DIR}:/ros2_ws/src/nsysu_drone_bringup" \
+    -v "${CONTROL_DIR}:/ros2_ws/src/nsysu_drone_control" \
     --env=QT_X11_NO_MITSHM=1 \
     --privileged \
     --name="${CONTAINER_NAME}" \

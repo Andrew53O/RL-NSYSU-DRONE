@@ -6,6 +6,7 @@ Priority: get the Part 2 RL pipeline working first. Part 1 evidence is still req
 
 - [x] Confirm `run_docker.sh` launches `nsysu_drone_vnc:iron`.
 - [x] Mount host `HW2_Work` into Docker at `/workspace/HW2_Work`.
+- [x] Mount host ROS source packages into `/ros2_ws/src` for automatic source sync.
 - [ ] Start container from host with `GPU_ID=0 ./run_docker.sh`.
 - [ ] Inside container, install RL dependencies once:
   `python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas`
