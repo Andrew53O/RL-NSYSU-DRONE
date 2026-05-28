@@ -107,9 +107,29 @@ Visualization Manager:
               Alpha: 1
               Show Axes: false
               Show Trail: false
+            front_sonar_center_link:
+              Alpha: 1
+              Show Axes: true
+              Show Trail: false
+            front_sonar_down_link:
+              Alpha: 1
+              Show Axes: true
+              Show Trail: false
+            front_sonar_left_link:
+              Alpha: 1
+              Show Axes: true
+              Show Trail: false
+            front_sonar_right_link:
+              Alpha: 1
+              Show Axes: true
+              Show Trail: false
+            front_sonar_up_link:
+              Alpha: 1
+              Show Axes: true
+              Show Trail: false
             sonar_link:
               Alpha: 1
-              Show Axes: false
+              Show Axes: true
               Show Trail: false
           Mass Properties:
             Inertia: false
@@ -136,6 +156,76 @@ Visualization Manager:
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /simple_drone/sonar/out
+          Value: true
+        - Alpha: 0.5
+          Buffer Length: 1
+          Class: rviz_default_plugins/Range
+          Color: 0; 255; 0
+          Enabled: true
+          Name: Front_Sonar_Center
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /simple_drone/front_sonar_center/out
+          Value: true
+        - Alpha: 0.5
+          Buffer Length: 1
+          Class: rviz_default_plugins/Range
+          Color: 255; 255; 0
+          Enabled: true
+          Name: Front_Sonar_Left
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /simple_drone/front_sonar_left/out
+          Value: true
+        - Alpha: 0.5
+          Buffer Length: 1
+          Class: rviz_default_plugins/Range
+          Color: 255; 0; 0
+          Enabled: true
+          Name: Front_Sonar_Right
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /simple_drone/front_sonar_right/out
+          Value: true
+        - Alpha: 0.5
+          Buffer Length: 1
+          Class: rviz_default_plugins/Range
+          Color: 0; 128; 255
+          Enabled: true
+          Name: Front_Sonar_Up
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /simple_drone/front_sonar_up/out
+          Value: true
+        - Alpha: 0.5
+          Buffer Length: 1
+          Class: rviz_default_plugins/Range
+          Color: 255; 0; 255
+          Enabled: true
+          Name: Front_Sonar_Down
+          Topic:
+            Depth: 5
+            Durability Policy: Volatile
+            Filter size: 10
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /simple_drone/front_sonar_down/out
           Value: true
         - Class: rviz_default_plugins/Image
           Enabled: true
