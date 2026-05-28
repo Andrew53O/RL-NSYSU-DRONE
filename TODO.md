@@ -21,46 +21,56 @@ Priority: finish **Part 2, Task D - sonar obstacle avoidance** first. Part 1 evi
 - [x] Confirmed the earlier 4-sonar layout was visible in Gazebo.
 - [x] Upgraded the design to 6 total sonar sensors: 1 downward safety sonar plus 5 front sectors.
 
-## Active Now: Six-Sonar Runtime Verification
+## Active Now: Side-Sonar Task D Improvements
 
-- [ ] Restart container with the updated `run_docker.sh`.
-- [ ] Rebuild ROS workspace inside Docker:
+- [ ] Add left and right side sonar sensors to the drone xacro/URDF:
+  `/simple_drone/side_sonar_left/out`
+  `/simple_drone/side_sonar_right/out`
+- [ ] Rebuild the ROS workspace inside Docker after sensor model edits:
   `colcon build --symlink-install --packages-select nsysu_drone_description nsysu_drone_bringup nsysu_drone_control`
-- [ ] Source the rebuilt workspace:
-  `source /ros2_ws/install/setup.bash`
-- [ ] Relaunch simulator with `launch_drone`.
-- [ ] Confirm the expected 6 sonar topics:
+- [ ] Verify the expected 8 sonar topics:
   `/simple_drone/sonar/out`
   `/simple_drone/front_sonar_left/out`
   `/simple_drone/front_sonar_center/out`
   `/simple_drone/front_sonar_right/out`
   `/simple_drone/front_sonar_up/out`
   `/simple_drone/front_sonar_down/out`
-- [ ] Echo each sonar topic once with `ros2 topic echo --once <topic>`.
-- [ ] Visually confirm the extra front/up/down range cones in Gazebo or RViz Range displays.
-- [ ] Move near a wall/cone and verify the front sonar ranges react.
+  `/simple_drone/side_sonar_left/out`
+  `/simple_drone/side_sonar_right/out`
+- [ ] Echo the two new side sonar topics once:
+  `ros2 topic echo --once /simple_drone/side_sonar_left/out`
+  `ros2 topic echo --once /simple_drone/side_sonar_right/out`
+- [ ] Update environment subscriptions for the two side sonar topics.
+- [ ] Expand the observation vector from 35 to 43 values with 7 obstacle-facing sonar sectors.
+- [ ] Keep the continuous action space fixed as `[vx_cmd, vy_cmd, vz_cmd]`.
+- [ ] Update reward terms so obstacle risk includes front and side sonar sectors.
+- [ ] Add side-sonar unsafe termination for left/right wall proximity.
+- [ ] Update the emergency safety filter so side sonar only prevents obvious side-wall collisions.
+- [ ] Add 4 curriculum stages while keeping one environment class, one observation shape, and one action shape.
+- [ ] Add evaluation metrics: success rate, crash rate, timeout rate, average return, average minimum obstacle sonar distance, average steps, safety filter activation count, and side near-miss count.
+- [ ] Document validation commands for side sonar topics, smoke tests, staged training, and evaluation.
+- [ ] Document report rationale for side sonar, processed sonar features, emergency filtering, frozen spaces, and curriculum training.
 
 ## Part 2 RL Training
 
 - [ ] Reinstall RL dependencies if the container was recreated:
   `python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas`
-- [ ] Delete or ignore the old `ppo_drone.zip` because the observation shape changed.
+- [ ] Delete or ignore the old `ppo_drone.zip` because the observation shape changed to 43.
 - [ ] Run smoke training:
-  `cd /workspace/HW2_Work/part2 && python3 train.py --smoke`
-- [ ] Confirm `models/ppo_drone.zip` and `logs/training_curve.png` are created.
-- [ ] Run one deterministic test:
-  `python3 test.py`
-- [ ] If smoke/test works, run longer training:
-  `python3 train.py --timesteps 50000`
-- [ ] Record status, final distance, minimum front sonar, minimum down sonar, and total reward.
+  `cd /workspace/HW2_Work/part2 && python3 train.py --smoke --stage 1`
+- [ ] Confirm `models/ppo_drone_stage1.zip` and a training curve are created.
+- [ ] Run deterministic evaluation:
+  `python3 test.py --episodes 3 --csv logs/eval_metrics.csv`
+- [ ] If smoke/eval works, train stages 1-4 in order.
+- [ ] Record status, final distance, minimum obstacle sonar, minimum down sonar, side near-misses, safety filter count, and total reward.
 
 ## Report Evidence
 
-- [ ] Capture screenshot of Gazebo/RViz with the six sonar cones visible.
-- [ ] Capture `ros2 topic list | grep sonar` output showing all six topics.
-- [ ] Capture example `ros2 topic echo --once` output for front center/up/down sonar.
-- [ ] Save final training curve from `HW2_Work/part2/logs/training_curve.png`.
-- [ ] Save test output after the final trained model.
+- [ ] Capture screenshot of Gazebo/RViz with the eight sonar cones visible.
+- [ ] Capture `ros2 topic list | grep sonar` output showing all eight topics.
+- [ ] Capture example `ros2 topic echo --once` output for the two side sonar topics.
+- [ ] Save final training curves from `HW2_Work/part2/logs/`.
+- [ ] Save evaluation CSV from `HW2_Work/part2/logs/eval_metrics.csv`.
 - [ ] Explain the MDP: state, action, reward, termination, and PPO setup.
 - [ ] Cite the literature papers for processed sonar state, short-term memory, risk tracking, and safety filtering.
 - [ ] Describe limitations: sonar is coarse, sector-based, and not camera/LiDAR.
