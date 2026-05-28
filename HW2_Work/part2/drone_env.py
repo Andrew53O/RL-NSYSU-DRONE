@@ -28,6 +28,19 @@ from sensor_msgs.msg import Range
 from std_msgs.msg import Empty
 
 
+OBSTACLE_SONAR_SECTORS = (
+    "front_left",
+    "front_center",
+    "front_right",
+    "front_up",
+    "front_down",
+    "side_left",
+    "side_right",
+)
+OBSTACLE_SONAR_COUNT = len(OBSTACLE_SONAR_SECTORS)
+OBSERVATION_DIM = 10 + (4 * OBSTACLE_SONAR_COUNT) + 5
+
+
 class DroneRosBridge(Node):
     """Thin ROS 2 bridge for the topics used by the Gym environment."""
 
@@ -187,9 +200,13 @@ class DroneSonarAvoidEnv(gym.Env):
 
         self.step_count = 0
         self.previous_distance: float | None = None
-        self.previous_front_sonar = np.full(5, 10.0, dtype=np.float32)
+        self.previous_obstacle_sonar = np.full(
+            OBSTACLE_SONAR_COUNT,
+            self.max_sonar_range,
+            dtype=np.float32,
+        )
         self.previous_action = np.zeros(3, dtype=np.float32)
-        self.recent_front_min = deque(maxlen=10)
+        self.recent_obstacle_min = deque(maxlen=10)
         self.last_status = "not_started"
         self.last_observation_info: dict[str, Any] = {}
         self.last_action_was_filtered = False
@@ -203,13 +220,13 @@ class DroneSonarAvoidEnv(gym.Env):
 
         # Observation:
         # [x/8, y/8, z/5, vx, vy, vz/0.5, dx/8, dy/8, dz/5, distance/12,
-        #  five normalized front ranges, five front risks,
-        #  five previous normalized front ranges, five front range trends,
-        #  min_recent_front/10, down_sonar/10, down_sonar_risk,
+        #  seven normalized obstacle ranges, seven obstacle risks,
+        #  seven previous normalized obstacle ranges, seven obstacle range trends,
+        #  min_recent_obstacle/10, down_sonar/10, down_sonar_risk,
         #  left_right_risk_balance, up_down_risk_balance]
         self.observation_space = spaces.Box(
-            low=np.array([-2.5] * 35, dtype=np.float32),
-            high=np.array([2.5] * 35, dtype=np.float32),
+            low=np.array([-2.5] * OBSERVATION_DIM, dtype=np.float32),
+            high=np.array([2.5] * OBSERVATION_DIM, dtype=np.float32),
             dtype=np.float32,
         )
 
@@ -227,8 +244,8 @@ class DroneSonarAvoidEnv(gym.Env):
         self.last_status = "running"
         self.previous_action = np.zeros(3, dtype=np.float32)
         self.last_action_was_filtered = False
-        self.recent_front_min.clear()
-        self.previous_front_sonar = self._safe_front_sonar_ranges()
+        self.recent_obstacle_min.clear()
+        self.previous_obstacle_sonar = self._safe_obstacle_sonar_ranges()
 
         self.ros.reset_and_takeoff(takeoff_altitude=self.takeoff_altitude)
         self._wait_for_initial_state(min_altitude=self.takeoff_altitude)
@@ -362,19 +379,29 @@ class DroneSonarAvoidEnv(gym.Env):
         distance = float(np.linalg.norm(delta)) if np.all(np.isfinite(delta)) else math.nan
 
         down_sonar_range = self._safe_sonar_range(self.ros.down_sonar_range)
-        front_sonar = self._safe_front_sonar_ranges()
-        front_norm = self._normalize_ranges(front_sonar)
-        previous_front_norm = self._normalize_ranges(self.previous_front_sonar)
-        front_risk = self._ranges_to_risk(front_sonar)
-        front_trend = previous_front_norm - front_norm
+        obstacle_sonar = self._safe_obstacle_sonar_ranges()
+        obstacle_norm = self._normalize_ranges(obstacle_sonar)
+        previous_obstacle_norm = self._normalize_ranges(self.previous_obstacle_sonar)
+        obstacle_risk = self._ranges_to_risk(obstacle_sonar)
+        obstacle_trend = previous_obstacle_norm - obstacle_norm
         down_norm = self._normalize_range(down_sonar_range)
         down_sonar_risk = float(self._range_to_risk(down_sonar_range))
 
+        front_sonar = obstacle_sonar[:5]
+        front_risk = obstacle_risk[:5]
+        front_trend = obstacle_trend[:5]
+        side_left_risk = float(obstacle_risk[5])
+        side_right_risk = float(obstacle_risk[6])
         min_front = float(np.min(front_sonar))
-        self.recent_front_min.append(min_front)
-        min_recent_front = min(self.recent_front_min) if self.recent_front_min else min_front
-        min_recent_norm = self._normalize_range(min_recent_front)
-        left_right_risk_balance = float(front_risk[0] - front_risk[2])
+        min_obstacle = float(np.min(obstacle_sonar))
+        self.recent_obstacle_min.append(min_obstacle)
+        min_recent_obstacle = (
+            min(self.recent_obstacle_min) if self.recent_obstacle_min else min_obstacle
+        )
+        min_recent_norm = self._normalize_range(min_recent_obstacle)
+        left_risk = max(float(front_risk[0]), side_left_risk)
+        right_risk = max(float(front_risk[2]), side_right_risk)
+        left_right_risk_balance = left_risk - right_risk
         up_down_risk_balance = float(front_risk[3] - front_risk[4])
 
         obs = np.concatenate(
@@ -394,10 +421,10 @@ class DroneSonarAvoidEnv(gym.Env):
                     ],
                     dtype=np.float32,
                 ),
-                front_norm,
-                front_risk,
-                previous_front_norm,
-                front_trend,
+                obstacle_norm,
+                obstacle_risk,
+                previous_obstacle_norm,
+                obstacle_trend,
                 np.array(
                     [
                         min_recent_norm,
@@ -423,20 +450,29 @@ class DroneSonarAvoidEnv(gym.Env):
             "front_sonar_right": float(front_sonar[2]),
             "front_sonar_up": float(front_sonar[3]),
             "front_sonar_down": float(front_sonar[4]),
+            "side_sonar_left": float(obstacle_sonar[5]),
+            "side_sonar_right": float(obstacle_sonar[6]),
             "front_risk_left": float(front_risk[0]),
             "front_risk_center": float(front_risk[1]),
             "front_risk_right": float(front_risk[2]),
             "front_risk_up": float(front_risk[3]),
             "front_risk_down": float(front_risk[4]),
+            "side_left_risk": side_left_risk,
+            "side_right_risk": side_right_risk,
             "min_front_sonar_range": min_front,
-            "min_recent_front_sonar_range": min_recent_front,
+            "min_obstacle_sonar_range": min_obstacle,
+            "min_recent_front_sonar_range": min_recent_obstacle,
+            "min_recent_obstacle_sonar_range": min_recent_obstacle,
             "mean_front_risk": float(np.mean(front_risk)),
             "max_front_risk": float(np.max(front_risk)),
             "max_front_approach_trend": float(np.max(front_trend)),
+            "obstacle_mean_risk": float(np.mean(obstacle_risk)),
+            "obstacle_max_risk": float(np.max(obstacle_risk)),
+            "max_obstacle_approach_trend": float(np.max(obstacle_trend)),
             "left_right_risk_balance": left_right_risk_balance,
             "up_down_risk_balance": up_down_risk_balance,
         }
-        self.previous_front_sonar = front_sonar
+        self.previous_obstacle_sonar = obstacle_sonar
         return obs
 
     def _safe_sonar_range(self, raw: float | None) -> float:
@@ -470,6 +506,20 @@ class DroneSonarAvoidEnv(gym.Env):
             ],
             dtype=np.float32,
         )
+
+    def _safe_side_sonar_ranges(self) -> np.ndarray:
+        return np.array(
+            [
+                self._safe_sonar_range(self.ros.side_sonar_ranges["left"]),
+                self._safe_sonar_range(self.ros.side_sonar_ranges["right"]),
+            ],
+            dtype=np.float32,
+        )
+
+    def _safe_obstacle_sonar_ranges(self) -> np.ndarray:
+        return np.concatenate(
+            [self._safe_front_sonar_ranges(), self._safe_side_sonar_ranges()]
+        ).astype(np.float32)
 
     def _apply_safety_filter(self, action: np.ndarray) -> tuple[np.ndarray, bool]:
         filtered = action.copy()
