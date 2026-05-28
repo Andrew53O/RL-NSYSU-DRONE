@@ -1,71 +1,82 @@
-# HW2 Fast-Finish TODO
+# HW2 Progress TODO
 
-Priority: get the Part 2 RL pipeline working first. Part 1 evidence is still required for the final submission, but defer screenshots/logs until the Part 2 code can train and test.
+Priority: finish **Part 2, Task D - sonar obstacle avoidance** first. Part 1 evidence is deferred until the Part 2 training/test pipeline is working, but it is still needed for the final submission if time allows.
 
-## Docker/mount setup
+## Completed
 
-- [x] Confirm `run_docker.sh` launches `nsysu_drone_vnc:iron`.
-- [x] Mount host `HW2_Work` into Docker at `/workspace/HW2_Work`.
-- [x] Mount host ROS source packages into `/ros2_ws/src` for automatic source sync.
-- [ ] Start container from host with `GPU_ID=0 ./run_docker.sh`.
-- [ ] Inside container, install RL dependencies once:
+- [x] Read `AGENTS.md` and assignment reference files.
+- [x] Digitalized the assignment PDFs into Markdown for easier reading.
+- [x] Collected Task D literature papers and notes in `Homework-files/papers/`.
+- [x] Set up Git/fork workflow and checkpoint commits.
+- [x] Confirmed Docker launches `nsysu_drone_vnc:iron`.
+- [x] Mounted `HW2_Work` into Docker at `/workspace/HW2_Work`.
+- [x] Mounted ROS source packages into `/ros2_ws/src` so host edits sync automatically.
+- [x] Created `HW2_Work/part2/drone_env.py`.
+- [x] Created `HW2_Work/part2/train.py`.
+- [x] Created `HW2_Work/part2/test.py`.
+- [x] Created `HW2_Work/README.md`.
+- [x] Created `REPORT.md` with obstacle curriculum and sonar design notes.
+- [x] Implemented PPO with continuous action `[vx_cmd, vy_cmd, vz_cmd]`.
+- [x] Implemented processed sonar state, short-term sonar memory, reward shaping, and safety termination.
+- [x] Confirmed the earlier 4-sonar layout was visible in Gazebo.
+- [x] Upgraded the design to 6 total sonar sensors: 1 downward safety sonar plus 5 front sectors.
+
+## Active Now: Six-Sonar Runtime Verification
+
+- [ ] Restart container with the updated `run_docker.sh`.
+- [ ] Rebuild ROS workspace inside Docker:
+  `colcon build --symlink-install --packages-select nsysu_drone_description nsysu_drone_bringup nsysu_drone_control`
+- [ ] Source the rebuilt workspace:
+  `source /ros2_ws/install/setup.bash`
+- [ ] Relaunch simulator with `launch_drone`.
+- [ ] Confirm the expected 6 sonar topics:
+  `/simple_drone/sonar/out`
+  `/simple_drone/front_sonar_left/out`
+  `/simple_drone/front_sonar_center/out`
+  `/simple_drone/front_sonar_right/out`
+  `/simple_drone/front_sonar_up/out`
+  `/simple_drone/front_sonar_down/out`
+- [ ] Echo each sonar topic once with `ros2 topic echo --once <topic>`.
+- [ ] Visually confirm the extra front/up/down range cones in Gazebo or RViz Range displays.
+- [ ] Move near a wall/cone and verify the front sonar ranges react.
+
+## Part 2 RL Training
+
+- [ ] Reinstall RL dependencies if the container was recreated:
   `python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas`
-- [ ] Verify `/workspace/HW2_Work` shows the host files.
+- [ ] Delete or ignore the old `ppo_drone.zip` because the observation shape changed.
+- [ ] Run smoke training:
+  `cd /workspace/HW2_Work/part2 && python3 train.py --smoke`
+- [ ] Confirm `models/ppo_drone.zip` and `logs/training_curve.png` are created.
+- [ ] Run one deterministic test:
+  `python3 test.py`
+- [ ] If smoke/test works, run longer training:
+  `python3 train.py --timesteps 50000`
+- [ ] Record status, final distance, minimum front sonar, minimum down sonar, and total reward.
 
-## Repository inspection
+## Report Evidence
 
-- [x] Read `AGENTS.md`.
-- [x] Inspect assignment PDFs/Markdown references.
-- [x] Inspect `README.md`.
-- [x] Inspect `fly_straight.py` and `rl_fly_to_target.py`.
-- [x] Inspect launch files, `drone.yaml`, URDF/Xacro, and world file.
-- [x] Confirm original sonar topic is `/simple_drone/sonar/out`.
-- [ ] Confirm added front sonar topics after ROS rebuild.
+- [ ] Capture screenshot of Gazebo/RViz with the six sonar cones visible.
+- [ ] Capture `ros2 topic list | grep sonar` output showing all six topics.
+- [ ] Capture example `ros2 topic echo --once` output for front center/up/down sonar.
+- [ ] Save final training curve from `HW2_Work/part2/logs/training_curve.png`.
+- [ ] Save test output after the final trained model.
+- [ ] Explain the MDP: state, action, reward, termination, and PPO setup.
+- [ ] Cite the literature papers for processed sonar state, short-term memory, risk tracking, and safety filtering.
+- [ ] Describe limitations: sonar is coarse, sector-based, and not camera/LiDAR.
 
-## Part 2 environment implementation
+## Deferred Part 1 Evidence
 
-- [x] Create `HW2_Work/part2/drone_env.py`.
-- [x] Implement `DroneSonarAvoidEnv`.
-- [x] Subscribe to pose, velocity, and sonar topics.
-- [x] Publish reset, takeoff, and velocity commands.
-- [x] Include processed sonar features in the observation vector.
-- [x] Implement shaped reward and explicit termination conditions.
-- [ ] Run a simulator smoke test.
+- [ ] Launch Gazebo/RViz and capture the required Part 1 screenshot.
+- [ ] Run `fly_straight.py` to the default target and save terminal output.
+- [ ] Test at least 3 alternative targets if time allows.
+- [ ] Write short notes comparing classical proportional control against learned PPO behavior.
+- [ ] Add Appendix A notes on `Kp` and `max_speed` if needed.
 
-## Training script
+## Final Packaging
 
-- [x] Create `HW2_Work/part2/train.py`.
-- [x] Train Stable-Baselines3 PPO.
-- [x] Save model to `HW2_Work/part2/models/ppo_drone.zip`.
-- [x] Save logs under `HW2_Work/part2/logs/`.
-- [x] Add a `--smoke` mode for short test runs.
-- [ ] Run smoke training inside Docker with Gazebo running.
-- [ ] Run longer training if smoke training works.
-
-## Test script
-
-- [x] Create `HW2_Work/part2/test.py`.
-- [x] Load trained PPO model.
-- [x] Reset, take off, and run deterministic policy in Gazebo.
-- [x] Print status, final distance, minimum sonar range, and total reward.
-- [ ] Run test inside Docker with Gazebo running.
-
-## Training curve generation
-
-- [x] Generate `HW2_Work/part2/logs/training_curve.png` from Monitor logs.
-- [ ] Confirm curve is created after smoke training.
-- [ ] Use the final training curve in the report.
-
-## Minimal report/README support
-
-- [x] Create `HW2_Work/README.md`.
-- [x] Document environment setup, train/test commands, outputs, and sonar limitation.
-- [ ] Add final model result numbers after testing.
-- [ ] Use `Homework-files/papers/paper_metadata.md` for report citations.
-
-## Deferred Part 1 evidence
-
-- [ ] Launch Gazebo/RViz and capture at least one screenshot.
-- [ ] Run `fly_straight.py` to default target and save terminal log.
-- [ ] Test at least 3 alternative targets.
-- [ ] Write Appendix A notes on `Kp` and `max_speed`.
+- [ ] Confirm `HW2_Work/README.md` has correct run commands.
+- [ ] Confirm model, logs, and report images are present.
+- [ ] Check `git status` for accidental unrelated files.
+- [ ] Make final Git commit.
+- [ ] Push to the fork when ready.

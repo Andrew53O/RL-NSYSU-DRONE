@@ -7,7 +7,7 @@ This file intentionally keeps the RL interface small:
 - reward: target progress with safety penalties
 
 The original simulator publishes one downward Range message. For Task D, this
-workspace adds three forward sonar sectors and treats the downward sonar as a
+workspace adds five forward sonar sectors and treats the downward sonar as a
 separate altitude/proximity safety cue.
 """
 
@@ -42,6 +42,8 @@ class DroneRosBridge(Node):
             "left": None,
             "center": None,
             "right": None,
+            "up": None,
+            "down": None,
         }
         self.sonar_min_range = 0.02
         self.sonar_max_range = 10.0
@@ -62,6 +64,12 @@ class DroneRosBridge(Node):
         )
         self.create_subscription(
             Range, f"{ns}/front_sonar_right/out", self._front_sonar_cb("right"), 10
+        )
+        self.create_subscription(
+            Range, f"{ns}/front_sonar_up/out", self._front_sonar_cb("up"), 10
+        )
+        self.create_subscription(
+            Range, f"{ns}/front_sonar_down/out", self._front_sonar_cb("down"), 10
         )
 
     def _pose_cb(self, msg: Pose) -> None:
@@ -156,7 +164,7 @@ class DroneSonarAvoidEnv(gym.Env):
 
         self.step_count = 0
         self.previous_distance: float | None = None
-        self.previous_front_sonar = np.full(3, 10.0, dtype=np.float32)
+        self.previous_front_sonar = np.full(5, 10.0, dtype=np.float32)
         self.recent_front_min = deque(maxlen=10)
         self.last_status = "not_started"
 
@@ -170,21 +178,21 @@ class DroneSonarAvoidEnv(gym.Env):
         # Observation:
         # [x, y, z, vx, vy, vz, target_x, target_y, target_z,
         #  dx, dy, dz, distance, down_sonar,
-        #  front_left, front_center, front_right,
-        #  prev_front_left, prev_front_center, prev_front_right,
+        #  front_left, front_center, front_right, front_up, front_down,
+        #  prev_front_left, prev_front_center, prev_front_right, prev_front_up, prev_front_down,
         #  min_recent_front, front_risk_trend]
         self.observation_space = spaces.Box(
             low=np.array(
                 [
                     -20, -20, 0, -5, -5, -5, -20, -20, 0, -20, -20, -10,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, -10,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -10,
                 ],
                 dtype=np.float32,
             ),
             high=np.array(
                 [
                     20, 20, 10, 5, 5, 5, 20, 20, 10, 20, 20, 10,
-                    50, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+                    50, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
                 ],
                 dtype=np.float32,
             ),
@@ -227,7 +235,7 @@ class DroneSonarAvoidEnv(gym.Env):
         obs = self._get_obs()
         current_distance = float(obs[12])
         down_sonar_range = float(obs[13])
-        min_front_range = float(obs[20])
+        min_front_range = float(obs[24])
 
         progress_reward = 0.0
         if self.previous_distance is not None and math.isfinite(current_distance):
@@ -352,6 +360,8 @@ class DroneSonarAvoidEnv(gym.Env):
                 self._safe_sonar_range(self.ros.front_sonar_ranges["left"]),
                 self._safe_sonar_range(self.ros.front_sonar_ranges["center"]),
                 self._safe_sonar_range(self.ros.front_sonar_ranges["right"]),
+                self._safe_sonar_range(self.ros.front_sonar_ranges["up"]),
+                self._safe_sonar_range(self.ros.front_sonar_ranges["down"]),
             ],
             dtype=np.float32,
         )
@@ -373,7 +383,9 @@ class DroneSonarAvoidEnv(gym.Env):
             "front_sonar_left": float(obs[14]),
             "front_sonar_center": float(obs[15]),
             "front_sonar_right": float(obs[16]),
-            "min_recent_front_sonar_range": float(obs[20]),
+            "front_sonar_up": float(obs[17]),
+            "front_sonar_down": float(obs[18]),
+            "min_recent_front_sonar_range": float(obs[24]),
             "step_count": self.step_count,
             "target": self.target.copy(),
         }

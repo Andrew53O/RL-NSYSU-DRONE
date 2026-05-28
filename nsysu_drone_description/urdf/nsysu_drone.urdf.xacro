@@ -72,6 +72,20 @@
   </joint>
   <link name="front_sonar_right_link"/>
 
+  <joint name="front_sonar_up_joint" type="fixed">
+    <origin rpy="0 ${-1 * M_PI/12} 0" xyz="0.25 0 0"/>
+    <parent link="base_link" />
+    <child link="front_sonar_up_link" />
+  </joint>
+  <link name="front_sonar_up_link"/>
+
+  <joint name="front_sonar_down_joint" type="fixed">
+    <origin rpy="0 ${M_PI/12} 0" xyz="0.25 0 0"/>
+    <parent link="base_link" />
+    <child link="front_sonar_down_link" />
+  </joint>
+  <link name="front_sonar_down_link"/>
+
 
   <joint name="front_cam_joint" type="fixed">
     <origin rpy="0 0 0" xyz="0.2 0 0"/>
@@ -256,6 +270,8 @@
   <xacro:front_sonar_sensor sensor_name="front_sonar_center" link_name="front_sonar_center_link"/>
   <xacro:front_sonar_sensor sensor_name="front_sonar_left" link_name="front_sonar_left_link"/>
   <xacro:front_sonar_sensor sensor_name="front_sonar_right" link_name="front_sonar_right_link"/>
+  <xacro:front_sonar_sensor sensor_name="front_sonar_up" link_name="front_sonar_up_link"/>
+  <xacro:front_sonar_sensor sensor_name="front_sonar_down" link_name="front_sonar_down_link"/>
 
   <gazebo reference="front_cam_link">
     <sensor name="front_camera" type="camera">

@@ -49,6 +49,8 @@ def main() -> None:
             float(info["front_sonar_left"]),
             float(info["front_sonar_center"]),
             float(info["front_sonar_right"]),
+            float(info["front_sonar_up"]),
+            float(info["front_sonar_down"]),
         )
         min_down_sonar = min(min_down_sonar, float(info["down_sonar_range"]))
 
@@ -61,6 +63,8 @@ def main() -> None:
                 float(info["front_sonar_left"]),
                 float(info["front_sonar_center"]),
                 float(info["front_sonar_right"]),
+                float(info["front_sonar_up"]),
+                float(info["front_sonar_down"]),
             )
             min_down_sonar = min(min_down_sonar, float(info["down_sonar_range"]))
             status = str(info["status"])

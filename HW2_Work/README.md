@@ -121,6 +121,8 @@ The environment uses:
 | `/simple_drone/front_sonar_left/out` | `sensor_msgs/Range` | Left-front obstacle cue |
 | `/simple_drone/front_sonar_center/out` | `sensor_msgs/Range` | Center-front obstacle cue |
 | `/simple_drone/front_sonar_right/out` | `sensor_msgs/Range` | Right-front obstacle cue |
+| `/simple_drone/front_sonar_up/out` | `sensor_msgs/Range` | Upward-pitched front obstacle cue |
+| `/simple_drone/front_sonar_down/out` | `sensor_msgs/Range` | Downward-pitched front obstacle cue |
 
 ## Design Notes
 
@@ -134,7 +136,9 @@ Observation vector:
  distance_to_target,
  down_sonar_range,
  front_sonar_left, front_sonar_center, front_sonar_right,
+ front_sonar_up, front_sonar_down,
  previous_front_left, previous_front_center, previous_front_right,
+ previous_front_up, previous_front_down,
  min_recent_front_sonar_range,
  front_risk_trend]
 ```
@@ -173,6 +177,8 @@ Termination conditions:
 
 ## Sonar Limitation
 
-The stock simulator originally provided a single downward `sensor_msgs/Range` sonar output. For Task D, this workspace adds three forward-facing sonar sectors so the policy can distinguish left, center, and right obstacle risk.
+The stock simulator originally provided a single downward `sensor_msgs/Range` sonar output. For Task D, this workspace uses six total sonar sensors: one downward safety sonar plus five front-facing sectors. The front sectors distinguish left, center, right, upward-pitched, and downward-pitched obstacle risk.
+
+The vertical front sectors are important because the PPO action includes `vz_cmd`. If the center or lower front sonar reports danger, the policy has state information that can support climbing behavior instead of only steering left or right.
 
 The literature notes in `Homework-files/papers/literature_design_notes.md` support this design choice: process sonar into risk features, add short-term memory, and keep explicit safety logic around the learned policy.

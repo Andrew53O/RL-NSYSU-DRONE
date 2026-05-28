@@ -14,13 +14,17 @@ The original simulator publishes downward sonar on:
 /simple_drone/sonar/out
 ```
 
-This is a `sensor_msgs/Range` topic. In the stock drone model, this sonar behaves like a downward/coarse proximity sensor, not a full forward-facing obstacle detector. For the Task D design, we add three forward sonar sectors:
+This is a `sensor_msgs/Range` topic. In the stock drone model, this sonar behaves like a downward/coarse proximity sensor, not a full forward-facing obstacle detector. For the Task D design, we keep that downward sonar for ground/altitude safety and add five front sonar sectors:
 
 ```text
 /simple_drone/front_sonar_left/out
 /simple_drone/front_sonar_center/out
 /simple_drone/front_sonar_right/out
+/simple_drone/front_sonar_up/out
+/simple_drone/front_sonar_down/out
 ```
+
+The left/center/right sectors give horizontal obstacle awareness. The up/down sectors give vertical obstacle awareness, which matters because the action includes `vz_cmd`; the policy can learn to climb when front-low or center sectors show risk.
 
 Before claiming strong obstacle avoidance, verify whether the sonar range changes near cones or walls.
 
@@ -86,6 +90,8 @@ Run:
 
 ```bash
 ros2 topic echo /simple_drone/front_sonar_center/out
+ros2 topic echo /simple_drone/front_sonar_up/out
+ros2 topic echo /simple_drone/front_sonar_down/out
 ```
 
 Then move the drone:
@@ -186,7 +192,7 @@ Therefore, the planned algorithm is:
 
 ```text
 PPO policy
-  input: pose, velocity, target vector, downward sonar, front-left/center/right sonar, previous front sonar, recent minimum front sonar
+  input: pose, velocity, target vector, downward sonar, front-left/center/right/up/down sonar, previous front sonar, recent minimum front sonar
   output: continuous velocity command
   reward: target progress - distance/action/sonar-risk penalties + success/crash terms
   safety: terminate or strongly penalize unsafe sonar, low altitude, out of bounds, invalid sensor state
