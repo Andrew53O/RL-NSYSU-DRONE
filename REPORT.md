@@ -192,10 +192,26 @@ Therefore, the planned algorithm is:
 
 ```text
 PPO policy
-  input: pose, velocity, target vector, downward sonar, front-left/center/right/up/down sonar, previous front sonar, recent minimum front sonar
+  input: normalized pose, velocity, target vector, front sonar ranges/risks/trends, previous front sonar, recent minimum front sonar, downward sonar risk
   output: continuous velocity command
-  reward: target progress - distance/action/sonar-risk penalties + success/crash terms
-  safety: terminate or strongly penalize unsafe sonar, low altitude, out of bounds, invalid sensor state
+  reward: target progress - distance/action/smoothness/sonar-risk/trend penalties + success/crash terms
+  safety: terminate unsafe states and apply a small emergency filter before publishing dangerous commands
 ```
 
 This is not just "PPO flies to a target." It is PPO over a processed sonar-risk state, with short-term sonar memory and explicit safety conditions.
+
+## Final Observation, Action, and Reward Design
+
+The final observation uses 35 normalized values. Raw sonar ranges are converted into front-sector range features, risk features, previous-range memory, trend features, recent minimum clearance, and left-right/up-down risk balances. This follows Yuan et al.'s processed sonar-state idea, Mane et al.'s short-term memory idea, Li et al.'s risk-tracking idea, and Barreto-Cubero et al.'s view that sonar should be interpreted as imperfect local proximity sectors.
+
+The action remains continuous velocity control:
+
+```text
+[vx_cmd, vy_cmd, vz_cmd]
+```
+
+This is intentionally simple. The five front sonar sectors make vertical motion meaningful, because PPO can learn to climb when center or front-down sonar risk is high.
+
+The reward combines progress to the goal, distance penalty, mean and maximum front-sonar risk penalties, approach-trend penalty, downward-sonar risk penalty, action magnitude penalty, action-smoothness penalty, success bonus, and terminal safety penalties. This makes obstacle avoidance part of every step, not only a final collision event.
+
+The safety filter is emergency-only. If front sonar is dangerously close, it limits forward motion and pushes backward/upward. If downward sonar is too close to the ground, it forces upward motion. This is consistent with Mane et al.'s safety-filtering idea while still keeping PPO as the main controller.

@@ -104,6 +104,7 @@ The test script prints:
 - final distance to target
 - minimum front sonar range
 - minimum downward sonar range
+- safety filter override count
 - total episode reward
 
 ## ROS Topics
@@ -129,19 +130,27 @@ The environment uses:
 Observation vector:
 
 ```text
-[x, y, z,
- vx, vy, vz,
- target_x, target_y, target_z,
- dx_to_target, dy_to_target, dz_to_target,
- distance_to_target,
- down_sonar_range,
- front_sonar_left, front_sonar_center, front_sonar_right,
- front_sonar_up, front_sonar_down,
- previous_front_left, previous_front_center, previous_front_right,
- previous_front_up, previous_front_down,
- min_recent_front_sonar_range,
- front_risk_trend]
+[x/8, y/8, z/5,
+ vx, vy, vz/0.5,
+ dx_to_target/8, dy_to_target/8, dz_to_target/5,
+ distance_to_target/12,
+ front_left_range/10, front_center_range/10, front_right_range/10,
+ front_up_range/10, front_down_range/10,
+ front_left_risk, front_center_risk, front_right_risk,
+ front_up_risk, front_down_risk,
+ previous_front_left_range/10, previous_front_center_range/10,
+ previous_front_right_range/10, previous_front_up_range/10,
+ previous_front_down_range/10,
+ front_left_trend, front_center_trend, front_right_trend,
+ front_up_trend, front_down_trend,
+ min_recent_front_range/10,
+ down_sonar_range/10,
+ down_sonar_risk,
+ left_right_risk_balance,
+ up_down_risk_balance]
 ```
+
+The observation has 35 values. Sonar risk is computed from the caution distance, so `0` means clear and `1` means close/unsafe.
 
 Action vector:
 
@@ -159,10 +168,13 @@ vz_cmd: [-0.5, 0.5]
 
 Reward terms:
 
-- progress toward target
-- small distance penalty
-- small action penalty
-- obstacle/sonar proximity penalty
+- weighted progress toward target
+- distance-to-target penalty
+- mean and maximum front-sonar risk penalties
+- front-sonar approach-trend penalty
+- downward-sonar risk penalty
+- action magnitude and action-smoothness penalties
+- small penalty when the emergency safety filter overrides an action
 - success bonus
 - crash, out-of-bounds, unsafe-sonar, and invalid-sensor penalties
 
@@ -180,5 +192,7 @@ Termination conditions:
 The stock simulator originally provided a single downward `sensor_msgs/Range` sonar output. For Task D, this workspace uses six total sonar sensors: one downward safety sonar plus five front-facing sectors. The front sectors distinguish left, center, right, upward-pitched, and downward-pitched obstacle risk.
 
 The vertical front sectors are important because the PPO action includes `vz_cmd`. If the center or lower front sonar reports danger, the policy has state information that can support climbing behavior instead of only steering left or right.
+
+The learned PPO action is treated as a nominal command. A small emergency safety filter slows or redirects commands when front sonar is dangerously close or the downward sonar is too near the ground.
 
 The literature notes in `Homework-files/papers/literature_design_notes.md` support this design choice: process sonar into risk features, add short-term memory, and keep explicit safety logic around the learned policy.

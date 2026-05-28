@@ -40,6 +40,7 @@ def main() -> None:
     total_reward = 0.0
     min_front_sonar = float("inf")
     min_down_sonar = float("inf")
+    safety_filter_overrides = 0
     status = "running"
 
     try:
@@ -67,6 +68,8 @@ def main() -> None:
                 float(info["front_sonar_down"]),
             )
             min_down_sonar = min(min_down_sonar, float(info["down_sonar_range"]))
+            if bool(info.get("action_was_filtered", False)):
+                safety_filter_overrides += 1
             status = str(info["status"])
             if terminated or truncated:
                 break
@@ -75,6 +78,7 @@ def main() -> None:
         print(f"final_distance_to_target: {info['distance_to_target']:.3f}")
         print(f"minimum_front_sonar_range: {min_front_sonar:.3f}")
         print(f"minimum_down_sonar_range: {min_down_sonar:.3f}")
+        print(f"safety_filter_overrides: {safety_filter_overrides}")
         print(f"total_episode_reward: {total_reward:.3f}")
     finally:
         env.close()
