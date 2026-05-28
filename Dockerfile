@@ -12,8 +12,18 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     mesa-utils \
     build-essential \
+    python3-pip \
     gnupg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# ---------- RL Python packages for HW2 Task D ----------
+RUN python3 -m pip install --no-cache-dir \
+    "numpy<2" \
+    gymnasium \
+    stable-baselines3 \
+    matplotlib \
+    pandas && \
+    python3 -c "import gymnasium, stable_baselines3, matplotlib, pandas; print('HW2 RL packages installed OK')"
 
 # ---------- Gazebo Classic + ROS 2 gazebo bridge ----------
 RUN echo "deb http://packages.osrfoundation.org/gazebo/ubuntu $(lsb_release -cs) main" \
