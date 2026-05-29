@@ -444,17 +444,28 @@ class DroneSonarAvoidEnv(gym.Env):
         self.previous_distance = current_distance
 
         direction_reward = 0.0
+        forward_direction_reward = 0.0
         vertical_direction_reward = 0.0
         if math.isfinite(current_distance) and current_distance > 1e-6:
             target_direction = target_error / current_distance
             command_alignment = float(np.dot(filtered_action, target_direction))
             direction_reward = 0.35 * float(np.clip(command_alignment, -1.0, 1.0))
+            if abs(float(target_error[0])) > 0.05:
+                desired_vx_sign = math.copysign(1.0, float(target_error[0]))
+                forward_alignment = desired_vx_sign * float(filtered_action[0])
+                forward_direction_reward = 0.18 * float(
+                    np.clip(forward_alignment, -1.0, 1.0)
+                )
             if abs(float(target_error[2])) > 0.05:
                 desired_vz_sign = math.copysign(1.0, float(target_error[2]))
                 vertical_alignment = desired_vz_sign * float(filtered_action[2] / 0.5)
                 vertical_direction_reward = 0.18 * float(np.clip(vertical_alignment, -1.0, 1.0))
 
         distance_penalty = 0.06 * reward_distance
+        # The policy already observes x and dx. Give the reward a direct x-axis
+        # signal too, because Stage-1 run007 fixed most of the altitude error
+        # but still stopped roughly 0.4 m short in x.
+        forward_error_penalty = 0.10 * x_error
         # Stage-1 evals repeatedly timed out near the target because the drone
         # hovered 0.5-0.65 m above the requested altitude. Since z and dz are
         # already in the observation, make altitude error visible in reward on
@@ -482,7 +493,7 @@ class DroneSonarAvoidEnv(gym.Env):
                 near_target_bonus += 0.45 * (0.5 - current_distance)
 
             near_target_precision_penalty = 0.30 * current_distance
-            near_target_axis_penalty = 0.22 * x_error + 0.16 * y_error + 0.45 * z_error
+            near_target_axis_penalty = 0.45 * x_error + 0.16 * y_error + 0.45 * z_error
             near_target_high_penalty = 0.60 * above_target
             near_target_lateral_penalty = 0.12 * y_error
             near_target_velocity_penalty = 0.08 * velocity_norm
@@ -497,9 +508,11 @@ class DroneSonarAvoidEnv(gym.Env):
         reward = (
             progress_reward
             + direction_reward
+            + forward_direction_reward
             + vertical_direction_reward
             + near_target_bonus
             - distance_penalty
+            - forward_error_penalty
             - altitude_error_penalty
             - high_altitude_penalty
             - near_target_precision_penalty
