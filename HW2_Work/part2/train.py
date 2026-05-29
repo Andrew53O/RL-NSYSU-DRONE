@@ -33,6 +33,10 @@ except ImportError as exc:  # pragma: no cover - helpful runtime message
 from drone_env import DroneSonarAvoidEnv
 
 
+# File layout:
+# - PART2_DIR is /workspace/HW2_Work/part2 inside Docker.
+# - models/ stores Stable-Baselines3 PPO .zip checkpoints.
+# - logs/ stores Monitor CSV files and training-curve PNGs for the report.
 ROOT = Path(__file__).resolve().parents[1]
 PART2_DIR = Path(__file__).resolve().parent
 MODEL_DIR = PART2_DIR / "models"
@@ -40,6 +44,21 @@ LOG_DIR = PART2_DIR / "logs"
 MODEL_PATH = MODEL_DIR / "ppo_drone.zip"
 
 
+# Curriculum stages are intentionally simple. They do not change the neural
+# network, observation space, action space, or environment class. They only
+# change the target selection. This lets a PPO checkpoint from an easier stage
+# continue training in a harder stage without shape mismatch.
+#
+# Target coordinates use the Gazebo/world frame in meters:
+# - x: forward/back direction in the world. Positive x is farther "forward"
+#   from the origin in the usual fly_straight.py task.
+# - y: left/right direction in the world. Positive y is one side of the arena,
+#   negative y is the other side.
+# - z: altitude above the ground in meters.
+#
+# Example: target=(2.5, 0.0, 1.5) means "fly to x=2.5 m, y=0 m,
+# altitude z=1.5 m." Stage 1 is fixed because PPO first needs to learn basic
+# target-directed velocity control before obstacle avoidance is meaningful.
 CURRICULUM_STAGES = {
     1: {
         "name": "stage1_fixed_easy",
@@ -79,6 +98,15 @@ class CurriculumTargetWrapper(gym.Wrapper):
         self.stage_config = stage_config
 
     def reset(self, **kwargs):
+        # Gymnasium reset accepts an "options" dictionary. DroneSonarAvoidEnv
+        # already knows how to read options["target"], so the wrapper can choose
+        # a target here without modifying the base environment.
+        #
+        # Important: DroneSonarAvoidEnv.reset() is also where /reset and
+        # /takeoff are published. In other words, takeoff already happens before
+        # every learning episode. If you see "Takeoff wait timed out", the issue
+        # is that the drone did not reach the requested takeoff altitude in time,
+        # not that train.py forgot to publish /takeoff.
         options = dict(kwargs.pop("options", {}) or {})
         options["target"] = self._sample_target()
         return self.env.reset(options=options, **kwargs)
@@ -87,6 +115,9 @@ class CurriculumTargetWrapper(gym.Wrapper):
         if not self.stage_config.get("random_target", False):
             return tuple(self.stage_config["target"])
 
+        # target_bounds is ((x_min, x_max), (y_min, y_max), (z_min, z_max)).
+        # One random coordinate is sampled from each interval. This makes Stage
+        # 2+ generalize while preserving the same observation/action shapes.
         bounds = self.stage_config["target_bounds"]
         return tuple(random.uniform(low, high) for low, high in bounds)
 
@@ -103,8 +134,13 @@ def parse_args() -> argparse.Namespace:
       Runs a longer training job that can start learning useful behavior.
     """
     parser = argparse.ArgumentParser(description="Train PPO for NSYSU Drone Task D.")
+    # A timestep is one call to env.step(action), not a full episode.
+    # With max_steps=400 and step_dt=0.1 in DroneSonarAvoidEnv, one full timeout
+    # episode is about 400 timesteps, or roughly 40 simulated seconds.
     parser.add_argument("--timesteps", type=int, default=50_000)
     parser.add_argument("--smoke", action="store_true", help="Run a short training smoke test.")
+    # max_steps is the episode time limit. If rollout/ep_len_mean stays at 400,
+    # the policy is usually timing out instead of reaching the target.
     parser.add_argument("--max-steps", type=int, default=400)
     parser.add_argument("--stage", type=int, choices=sorted(CURRICULUM_STAGES), default=1)
     parser.add_argument(
@@ -112,7 +148,10 @@ def parse_args() -> argparse.Namespace:
         nargs=3,
         type=float,
         default=None,
-        help="Override the stage target for fixed-target experiments.",
+        help=(
+            "Override the stage target as x y z in meters. This disables random "
+            "target sampling for the run."
+        ),
     )
     parser.add_argument(
         "--resume-from",
@@ -171,9 +210,15 @@ def build_training_curve(monitor_path: Path, curve_path: Path) -> None:
 
 
 def resolve_resume_path(args: argparse.Namespace) -> Path | None:
+    # Manual resume has priority. Use this when you want to keep training the
+    # same stage after a 10k-timestep chunk:
+    # python3 train.py --stage 1 --resume-from models/ppo_drone_stage1.zip ...
     if args.resume_from is not None:
         return args.resume_from
 
+    # For Stage 2+, automatically continue from the previous stage if it exists.
+    # This is the curriculum handoff: Stage 2 starts from Stage 1, Stage 3 from
+    # Stage 2, and Stage 4 from Stage 3.
     previous_stage_path = MODEL_DIR / f"ppo_drone_stage{args.stage - 1}.zip"
     if args.stage > 1 and previous_stage_path.exists():
         return previous_stage_path
@@ -184,12 +229,17 @@ def main() -> None:
     args = parse_args()
     stage_config = dict(CURRICULUM_STAGES[args.stage])
     if args.target:
+        # A user-supplied --target is useful for deterministic evaluation-style
+        # training experiments. It turns even random stages into fixed-target
+        # runs for this process.
         stage_config["target"] = tuple(args.target)
         stage_config["random_target"] = False
 
     # Smoke mode is only a pipeline check. It is not enough for final behavior.
     # Longer training should use --timesteps 50000 or more.
     total_timesteps = 1_000 if args.smoke else args.timesteps
+    # Each stage gets its own checkpoint and curve. ppo_drone.zip is also saved
+    # as a convenience "latest model" path for test.py.
     model_path = MODEL_DIR / f"ppo_drone_stage{args.stage}.zip"
     monitor_path = LOG_DIR / f"stage{args.stage}.monitor.csv"
     curve_path = LOG_DIR / f"training_curve_stage{args.stage}.png"
@@ -204,6 +254,11 @@ def main() -> None:
     # - subscribes to pose, velocity, and all sonar topics
     # - converts simulator state into a Gym observation vector
     # - computes reward and termination conditions
+    #
+    # Takeoff is not controlled by PPO. The env reset routine publishes takeoff
+    # first, waits for a safe starting altitude, and then PPO begins choosing
+    # velocity commands. So Stage 1 trains "fly from the reset/takeoff state to
+    # the target", not "learn the takeoff command itself."
     base_target = tuple(stage_config["target"])
     env = DroneSonarAvoidEnv(target=base_target, max_steps=args.max_steps)
     env = CurriculumTargetWrapper(env, stage_config)
