@@ -90,9 +90,11 @@ Expected outputs:
 
 ```text
 HW2_Work/part2/models/stage1/run001/ppo_drone.zip
+HW2_Work/part2/models/stage1/run001/run_config.json
 HW2_Work/part2/logs/stage1/run001/monitor.csv
 HW2_Work/part2/logs/stage1/run001/training_curve.png
 HW2_Work/part2/logs/stage1/run001/training_curve.csv
+HW2_Work/part2/logs/stage1/run001/run_config.json
 ```
 
 Training outputs are numbered by default, so the next run becomes `run002`

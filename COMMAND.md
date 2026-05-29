@@ -240,9 +240,11 @@ Expected outputs:
 
 ```text
 /workspace/HW2_Work/part2/models/stage1/smoke_run001/ppo_drone.zip
+/workspace/HW2_Work/part2/models/stage1/smoke_run001/run_config.json
 /workspace/HW2_Work/part2/logs/stage1/smoke_run001/monitor.csv
 /workspace/HW2_Work/part2/logs/stage1/smoke_run001/training_curve.png
 /workspace/HW2_Work/part2/logs/stage1/smoke_run001/training_curve.csv
+/workspace/HW2_Work/part2/logs/stage1/smoke_run001/run_config.json
 ```
 
 A smoke run only proves the pipeline works. It does not prove good obstacle avoidance yet.

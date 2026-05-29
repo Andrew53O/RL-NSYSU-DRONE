@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import random
+from datetime import datetime, timezone
 from pathlib import Path
 
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
@@ -454,6 +456,73 @@ def resolve_resume_path(args: argparse.Namespace) -> Path | None:
     return None
 
 
+def _json_ready(value):
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, list):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _json_ready(item) for key, item in value.items()}
+    return value
+
+
+def write_run_config(
+    path: Path,
+    args: argparse.Namespace,
+    stage_config: dict,
+    run_name: str,
+    total_timesteps: int,
+    effective_n_steps: int,
+    resume_path: Path | None,
+    run_model_dir: Path,
+    run_log_dir: Path,
+) -> None:
+    """Persist the exact training settings used for this PPO run."""
+    config = {
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "run_name": run_name,
+        "stage": args.stage,
+        "stage_config": _json_ready(stage_config),
+        "target": list(stage_config["target"]),
+        "success_distance": args.success_distance,
+        "total_timesteps": total_timesteps,
+        "smoke": args.smoke,
+        "max_steps": args.max_steps,
+        "ppo": {
+            "policy": "MlpPolicy",
+            "learning_rate": args.learning_rate,
+            "n_steps": effective_n_steps,
+            "batch_size": args.batch_size,
+            "gamma": args.gamma,
+            "device": "cpu",
+        },
+        "callbacks": {
+            "best_window": args.best_window,
+            "checkpoint_freq": args.checkpoint_freq,
+            "best_models": [
+                "best_episode_model.zip",
+                "best_average_model.zip",
+                "best_success_model.zip",
+            ],
+        },
+        "resume_from": str(resume_path) if resume_path is not None else None,
+        "outputs": {
+            "model_dir": str(run_model_dir),
+            "log_dir": str(run_log_dir),
+        },
+        "notes": (
+            "Stage 1 precision training uses success_distance=0.1 by default; "
+            "0.4 is only a loose sanity metric."
+        ),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as fp:
+        json.dump(config, fp, indent=2, sort_keys=True)
+        fp.write("\n")
+
+
 def main() -> None:
     args = parse_args()
     stage_config = dict(CURRICULUM_STAGES[args.stage])
@@ -483,6 +552,8 @@ def main() -> None:
     monitor_path = run_log_dir / "monitor.csv"
     curve_path = run_log_dir / "training_curve.png"
     curve_csv_path = run_log_dir / "training_curve.csv"
+    model_config_path = run_model_dir / "run_config.json"
+    log_config_path = run_log_dir / "run_config.json"
 
     # These folders live in the mounted HW2_Work directory, so models/logs
     # remain visible on the host after training inside Docker.
@@ -490,7 +561,15 @@ def main() -> None:
     run_log_dir.mkdir(parents=True, exist_ok=True)
     if not args.overwrite:
         existing_outputs = [
-            path for path in (model_path, monitor_path, curve_path, curve_csv_path)
+            path
+            for path in (
+                model_path,
+                monitor_path,
+                curve_path,
+                curve_csv_path,
+                model_config_path,
+                log_config_path,
+            )
             if path.exists()
         ]
         if existing_outputs:
@@ -523,9 +602,32 @@ def main() -> None:
     # to monitor.csv. PPO also prints those statistics during training.
     env = Monitor(env, filename=str(monitor_path))
 
+    resume_path = resolve_resume_path(args)
+    effective_n_steps = 256 if args.smoke else args.n_steps
+    write_run_config(
+        path=model_config_path,
+        args=args,
+        stage_config=stage_config,
+        run_name=run_name,
+        total_timesteps=total_timesteps,
+        effective_n_steps=effective_n_steps,
+        resume_path=resume_path,
+        run_model_dir=run_model_dir,
+        run_log_dir=run_log_dir,
+    )
+    write_run_config(
+        path=log_config_path,
+        args=args,
+        stage_config=stage_config,
+        run_name=run_name,
+        total_timesteps=total_timesteps,
+        effective_n_steps=effective_n_steps,
+        resume_path=resume_path,
+        run_model_dir=run_model_dir,
+        run_log_dir=run_log_dir,
+    )
+
     try:
-        resume_path = resolve_resume_path(args)
-        effective_n_steps = 256 if args.smoke else args.n_steps
         if resume_path is not None:
             if not resume_path.exists():
                 raise SystemExit(f"Resume checkpoint not found: {resume_path}")
@@ -613,6 +715,7 @@ def main() -> None:
         curve_saved = build_training_curve(monitor_path, curve_path, curve_csv_path)
         print(f"Run name: {run_name}")
         print(f"Saved stage model: {model_path}")
+        print(f"Saved run config: {model_config_path}")
         print(f"Saved best models under: {best_model_dir}")
         if args.checkpoint_freq > 0:
             print(f"Saved periodic checkpoints under: {checkpoint_dir}")
