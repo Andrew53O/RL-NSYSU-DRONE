@@ -169,17 +169,18 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_training_curve(monitor_path: Path, curve_path: Path) -> None:
-    """Create a PNG reward curve from Stable-Baselines3 Monitor logs.
+def build_training_curve(monitor_path: Path, curve_path: Path, csv_path: Path) -> bool:
+    """Create PNG and CSV reward curves from Stable-Baselines3 Monitor logs.
 
     Monitor writes one row per finished episode into monitor.csv. The column
     named "r" is the total reward for that episode. This function reads those
-    episode rewards and plots them so the report can show whether training
-    improved over time.
+    episode rewards and saves:
+    - a PNG plot for the report
+    - a CSV table that is easy to inspect with tail, pandas, or a spreadsheet
     """
     rewards: list[float] = []
     if not monitor_path.exists():
-        return
+        return False
 
     with monitor_path.open("r", newline="") as fp:
         # Stable-Baselines3 writes a comment/header line starting with "#".
@@ -192,19 +193,41 @@ def build_training_curve(monitor_path: Path, curve_path: Path) -> None:
                 continue
 
     if not rewards:
-        return
+        return False
+
+    window = min(20, max(5, len(rewards) // 5)) if len(rewards) >= 5 else 1
+    moving_avg = [
+        sum(rewards[max(0, i - window + 1): i + 1])
+        / len(rewards[max(0, i - window + 1): i + 1])
+        for i in range(len(rewards))
+    ]
+
+    with csv_path.open("w", newline="") as fp:
+        writer = csv.DictWriter(
+            fp,
+            fieldnames=[
+                "episode",
+                "reward",
+                "moving_average_reward",
+                "moving_average_window",
+            ],
+        )
+        writer.writeheader()
+        for episode, (reward, avg_reward) in enumerate(zip(rewards, moving_avg), start=1):
+            writer.writerow(
+                {
+                    "episode": episode,
+                    "reward": reward,
+                    "moving_average_reward": avg_reward,
+                    "moving_average_window": window,
+                }
+            )
 
     plt.figure(figsize=(8, 4.5))
     plt.plot(range(1, len(rewards) + 1), rewards, label="episode reward")
     if len(rewards) >= 5:
         # A moving average makes the learning trend easier to see than raw,
         # noisy episode rewards alone.
-        window = min(20, max(5, len(rewards) // 5))
-        moving_avg = [
-            sum(rewards[max(0, i - window + 1): i + 1])
-            / len(rewards[max(0, i - window + 1): i + 1])
-            for i in range(len(rewards))
-        ]
         plt.plot(range(1, len(moving_avg) + 1), moving_avg, label=f"{window}-episode avg")
     plt.xlabel("Episode")
     plt.ylabel("Reward")
@@ -214,6 +237,7 @@ def build_training_curve(monitor_path: Path, curve_path: Path) -> None:
     plt.tight_layout()
     plt.savefig(curve_path, dpi=150)
     plt.close()
+    return True
 
 
 def resolve_resume_path(args: argparse.Namespace) -> Path | None:
@@ -250,6 +274,7 @@ def main() -> None:
     model_path = MODEL_DIR / f"ppo_drone_stage{args.stage}.zip"
     monitor_path = LOG_DIR / f"stage{args.stage}.monitor.csv"
     curve_path = LOG_DIR / f"training_curve_stage{args.stage}.png"
+    curve_csv_path = LOG_DIR / f"training_curve_stage{args.stage}.csv"
 
     # These folders live in the mounted HW2_Work directory, so models/logs
     # remain visible on the host after training inside Docker.
@@ -324,11 +349,13 @@ def main() -> None:
         model.save(model_path)
         model.save(MODEL_PATH)
 
-        # Convert monitor.csv into logs/training_curve.png for the report.
-        build_training_curve(monitor_path, curve_path)
+        # Convert monitor.csv into report PNG and readable CSV training curves.
+        curve_saved = build_training_curve(monitor_path, curve_path, curve_csv_path)
         print(f"Saved stage model: {model_path}")
         print(f"Saved default model copy: {MODEL_PATH}")
-        print(f"Saved training curve: {curve_path}")
+        if curve_saved:
+            print(f"Saved training curve: {curve_path}")
+            print(f"Saved training curve CSV: {curve_csv_path}")
     finally:
         # Always close the environment so the ROS node stops publishing velocity
         # and shuts down cleanly, even if training is interrupted.
