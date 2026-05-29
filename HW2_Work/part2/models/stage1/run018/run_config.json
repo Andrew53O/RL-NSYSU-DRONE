@@ -1,0 +1,56 @@
+{
+  "callbacks": {
+    "best_models": [
+      "best_episode_model.zip",
+      "best_average_model.zip",
+      "best_success_model.zip",
+      "best_precision_model.zip"
+    ],
+    "best_window": 20,
+    "checkpoint_freq": 10000
+  },
+  "created_at_utc": "2026-05-29T16:24:46.579198+00:00",
+  "max_steps": 1500,
+  "notes": "Stage 1 precision training uses success_distance=0.1 by default; 0.4 is only a loose sanity metric.",
+  "observation_normalization": {
+    "pose_xy_norm": 8.0,
+    "pose_z_norm": 5.0,
+    "sonar_range_norm": 10.0,
+    "target_distance_norm": 3.0,
+    "target_xy_delta_norm": 3.0,
+    "target_z_delta_norm": 1.5
+  },
+  "outputs": {
+    "log_dir": "/workspace/HW2_Work/part2/logs/stage1/run018",
+    "model_dir": "/workspace/HW2_Work/part2/models/stage1/run018"
+  },
+  "ppo": {
+    "batch_size": 64,
+    "device": "cpu",
+    "gamma": 0.99,
+    "learning_rate": 0.0003,
+    "n_steps": 512,
+    "policy": "MlpPolicy"
+  },
+  "resume_from": null,
+  "run_name": "run018",
+  "smoke": false,
+  "stage": 1,
+  "stage_config": {
+    "description": "fixed start/reset and very close low-altitude target",
+    "name": "stage1_fixed_easy",
+    "random_target": false,
+    "target": [
+      1.0,
+      0.0,
+      0.8
+    ]
+  },
+  "success_distance": 0.1,
+  "target": [
+    1.0,
+    0.0,
+    0.8
+  ],
+  "total_timesteps": 50000
+}

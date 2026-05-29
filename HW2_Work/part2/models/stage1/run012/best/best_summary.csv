@@ -1,0 +1,4 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,saved
+1,800,-668.269196,timeout,-668.269196,0.0,best_episode_model+best_average_model
+2,1600,-576.502192,timeout,-622.3856940000001,0.0,best_episode_model+best_average_model
+3,2400,-563.707403,timeout,-602.8262636666667,0.0,best_episode_model+best_average_model
