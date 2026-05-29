@@ -33,6 +33,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target", nargs=3, type=float, default=(5.0, 3.0, 2.0))
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--csv", type=Path, default=DEFAULT_EVAL_CSV)
+    parser.add_argument(
+        "--log-position-every",
+        type=int,
+        default=25,
+        help="Print drone position, target, and distance every N env steps. 0 disables it.",
+    )
     return parser.parse_args()
 
 
@@ -138,7 +144,11 @@ def main() -> None:
     if args.episodes < 1:
         raise SystemExit("--episodes must be at least 1")
 
-    env = DroneSonarAvoidEnv(target=tuple(args.target), max_steps=args.max_steps)
+    env = DroneSonarAvoidEnv(
+        target=tuple(args.target),
+        max_steps=args.max_steps,
+        log_position_every=args.log_position_every,
+    )
     model = PPO.load(args.model, device="cpu")
     rows: list[dict[str, float | int | str]] = []
 

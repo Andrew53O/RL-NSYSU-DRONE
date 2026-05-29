@@ -159,6 +159,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional PPO checkpoint to continue training from.",
     )
+    parser.add_argument(
+        "--log-position-every",
+        type=int,
+        default=0,
+        help="Print drone position, target, and distance every N env steps. 0 disables it.",
+    )
     return parser.parse_args()
 
 
@@ -260,7 +266,11 @@ def main() -> None:
     # velocity commands. So Stage 1 trains "fly from the reset/takeoff state to
     # the target", not "learn the takeoff command itself."
     base_target = tuple(stage_config["target"])
-    env = DroneSonarAvoidEnv(target=base_target, max_steps=args.max_steps)
+    env = DroneSonarAvoidEnv(
+        target=base_target,
+        max_steps=args.max_steps,
+        log_position_every=args.log_position_every,
+    )
     env = CurriculumTargetWrapper(env, stage_config)
 
     # Monitor wraps the environment and records episode reward/length statistics

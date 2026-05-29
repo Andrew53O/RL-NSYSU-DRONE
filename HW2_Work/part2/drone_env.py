@@ -260,6 +260,7 @@ class DroneSonarAvoidEnv(gym.Env):
         max_steps: int = 400,
         namespace: str = "/simple_drone",
         step_dt: float = 0.1,
+        log_position_every: int = 0,
     ) -> None:
         super().__init__()
 
@@ -272,6 +273,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.target = np.array(target, dtype=np.float32)
         self.max_steps = int(max_steps)
         self.step_dt = float(step_dt)
+        self.log_position_every = max(0, int(log_position_every))
 
         self.target_reached_distance = 0.4
         self.min_altitude = 0.25
@@ -359,6 +361,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.step_count += 1
 
         obs = self._get_obs()
+        self._log_position_if_needed(force=True)
         info = self.last_observation_info
         current_distance = float(info["distance_to_target"])
         down_sonar_range = float(info["down_sonar_range"])
@@ -662,6 +665,24 @@ class DroneSonarAvoidEnv(gym.Env):
 
     def _sensor_state_valid(self, obs: np.ndarray) -> bool:
         return bool(np.all(np.isfinite(obs)))
+
+    def _log_position_if_needed(self, force: bool = False) -> None:
+        if not force and (
+            self.log_position_every <= 0
+            or self.step_count % self.log_position_every != 0
+        ):
+            return
+        info = self.last_observation_info
+        if not info:
+            return
+        print(
+            "[pose] "
+            f"step={self.step_count} "
+            f"pos=({info['x']:.2f}, {info['y']:.2f}, {info['z']:.2f}) "
+            f"target=({self.target[0]:.2f}, {self.target[1]:.2f}, {self.target[2]:.2f}) "
+            f"distance={info['distance_to_target']:.2f}",
+            flush=True,
+        )
 
     def _info(self, obs: np.ndarray, status: str | None = None) -> dict[str, Any]:
         info = dict(self.last_observation_info)
