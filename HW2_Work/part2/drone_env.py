@@ -487,15 +487,15 @@ class DroneSonarAvoidEnv(gym.Env):
         status = "running"
 
         if not self._sensor_state_valid(obs):
-            reward -= 50.0
+            reward -= 150.0
             terminated = True
             status = "invalid_sensor"
         elif current_distance < self.target_reached_distance:
-            reward += 50.0
+            reward += 300.0
             terminated = True
             status = "success"
         elif z_pos < self.min_altitude:
-            reward -= 50.0
+            reward -= 150.0
             terminated = True
             status = "crash"
         elif abs(x_pos) > self.xy_limit or abs(y_pos) > self.xy_limit or z_pos > self.max_altitude:
