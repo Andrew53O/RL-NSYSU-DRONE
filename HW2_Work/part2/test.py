@@ -40,12 +40,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--csv", type=Path, default=DEFAULT_EVAL_CSV)
     parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow overwriting the requested CSV path.",
+    )
+    parser.add_argument(
         "--log-position-every",
         type=int,
         default=25,
         help="Print drone position, target, and distance every N env steps. 0 disables it.",
     )
     return parser.parse_args()
+
+
+def next_available_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+    index = 1
+    while True:
+        candidate = path.with_name(f"{path.stem}_{index:03d}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+        index += 1
 
 
 def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str, float | int | str]:
@@ -155,6 +171,7 @@ def main() -> None:
         raise SystemExit(f"Model not found: {args.model}")
     if args.episodes < 1:
         raise SystemExit("--episodes must be at least 1")
+    csv_path = args.csv if args.overwrite else next_available_path(args.csv)
 
     env = DroneSonarAvoidEnv(
         target=tuple(args.target),
@@ -178,9 +195,9 @@ def main() -> None:
     finally:
         env.close()
 
-    write_eval_csv(args.csv, rows)
+    write_eval_csv(csv_path, rows)
     print_summary(rows)
-    print(f"saved_eval_csv: {args.csv}")
+    print(f"saved_eval_csv: {csv_path}")
 
 
 if __name__ == "__main__":

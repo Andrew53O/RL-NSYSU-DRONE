@@ -176,6 +176,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-steps", type=int, default=512)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Optional run label for model/log filenames. Auto-numbered if omitted.",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Allow reusing an existing run-name and overwriting its outputs.",
+    )
+    parser.add_argument(
+        "--update-latest",
+        action="store_true",
+        help="Also update ppo_drone_stageN.zip and ppo_drone.zip convenience copies.",
+    )
     return parser.parse_args()
 
 
@@ -250,6 +266,37 @@ def build_training_curve(monitor_path: Path, curve_path: Path, csv_path: Path) -
     return True
 
 
+def _sanitize_run_name(name: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in name.strip())
+    return safe or "run"
+
+
+def _next_stage_run_name(stage: int, smoke: bool) -> str:
+    prefix = f"stage{stage}_{'smoke_' if smoke else ''}run"
+    index = 1
+    while True:
+        candidate = f"{prefix}{index:03d}"
+        paths = [
+            MODEL_DIR / f"ppo_drone_{candidate}.zip",
+            LOG_DIR / f"{candidate}.monitor.csv",
+            LOG_DIR / f"training_curve_{candidate}.png",
+            LOG_DIR / f"training_curve_{candidate}.csv",
+        ]
+        if not any(path.exists() for path in paths):
+            return candidate
+        index += 1
+
+
+def _latest_stage_model(stage: int) -> Path | None:
+    candidates = list(MODEL_DIR.glob(f"ppo_drone_stage{stage}_run*.zip"))
+    legacy_path = MODEL_DIR / f"ppo_drone_stage{stage}.zip"
+    if legacy_path.exists():
+        candidates.append(legacy_path)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
 def resolve_resume_path(args: argparse.Namespace) -> Path | None:
     # Manual resume has priority. Use this when you want to keep training the
     # same stage after a 10k-timestep chunk:
@@ -260,9 +307,8 @@ def resolve_resume_path(args: argparse.Namespace) -> Path | None:
     # For Stage 2+, automatically continue from the previous stage if it exists.
     # This is the curriculum handoff: Stage 2 starts from Stage 1, Stage 3 from
     # Stage 2, and Stage 4 from Stage 3.
-    previous_stage_path = MODEL_DIR / f"ppo_drone_stage{args.stage - 1}.zip"
-    if args.stage > 1 and previous_stage_path.exists():
-        return previous_stage_path
+    if args.stage > 1:
+        return _latest_stage_model(args.stage - 1)
     return None
 
 
@@ -279,17 +325,34 @@ def main() -> None:
     # Smoke mode is only a pipeline check. It is not enough for final behavior.
     # Longer training should use --timesteps 50000 or more.
     total_timesteps = 1_000 if args.smoke else args.timesteps
-    # Each stage gets its own checkpoint and curve. ppo_drone.zip is also saved
-    # as a convenience "latest model" path for test.py.
-    model_path = MODEL_DIR / f"ppo_drone_stage{args.stage}.zip"
-    monitor_path = LOG_DIR / f"stage{args.stage}.monitor.csv"
-    curve_path = LOG_DIR / f"training_curve_stage{args.stage}.png"
-    curve_csv_path = LOG_DIR / f"training_curve_stage{args.stage}.csv"
+    # Each run gets numbered outputs by default so experiments are not
+    # overwritten. Use --run-name for a human label and --overwrite only when
+    # you intentionally want to replace that run's files.
+    run_name = (
+        _sanitize_run_name(args.run_name)
+        if args.run_name
+        else _next_stage_run_name(args.stage, args.smoke)
+    )
+    model_path = MODEL_DIR / f"ppo_drone_{run_name}.zip"
+    monitor_path = LOG_DIR / f"{run_name}.monitor.csv"
+    curve_path = LOG_DIR / f"training_curve_{run_name}.png"
+    curve_csv_path = LOG_DIR / f"training_curve_{run_name}.csv"
 
     # These folders live in the mounted HW2_Work directory, so models/logs
     # remain visible on the host after training inside Docker.
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    if not args.overwrite:
+        existing_outputs = [
+            path for path in (model_path, monitor_path, curve_path, curve_csv_path)
+            if path.exists()
+        ]
+        if existing_outputs:
+            paths = "\n".join(str(path) for path in existing_outputs)
+            raise SystemExit(
+                "Refusing to overwrite existing run outputs. Use a different "
+                f"--run-name or pass --overwrite.\n{paths}"
+            )
 
     # DroneSonarAvoidEnv is where ROS 2 communication happens:
     # - publishes /simple_drone/reset, /takeoff, and /cmd_vel
@@ -358,12 +421,17 @@ def main() -> None:
 
         # Save the learned neural-network policy. test.py loads this file later.
         model.save(model_path)
-        model.save(MODEL_PATH)
+        if args.update_latest:
+            model.save(MODEL_DIR / f"ppo_drone_stage{args.stage}.zip")
+            model.save(MODEL_PATH)
 
         # Convert monitor.csv into report PNG and readable CSV training curves.
         curve_saved = build_training_curve(monitor_path, curve_path, curve_csv_path)
+        print(f"Run name: {run_name}")
         print(f"Saved stage model: {model_path}")
-        print(f"Saved default model copy: {MODEL_PATH}")
+        if args.update_latest:
+            print(f"Updated stage latest model: {MODEL_DIR / f'ppo_drone_stage{args.stage}.zip'}")
+            print(f"Updated default model copy: {MODEL_PATH}")
         if curve_saved:
             print(f"Saved training curve: {curve_path}")
             print(f"Saved training curve CSV: {curve_csv_path}")
