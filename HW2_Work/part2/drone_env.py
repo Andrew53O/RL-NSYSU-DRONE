@@ -27,6 +27,12 @@ from rclpy.node import Node
 from sensor_msgs.msg import Range
 from std_msgs.msg import Empty
 
+try:
+    from gazebo_msgs.srv import DeleteEntity, SpawnEntity
+except ImportError:  # pragma: no cover - available inside the ROS/Gazebo container
+    DeleteEntity = None
+    SpawnEntity = None
+
 
 OBSTACLE_SONAR_SECTORS = (
     "front_left",
@@ -39,6 +45,28 @@ OBSTACLE_SONAR_SECTORS = (
 )
 OBSTACLE_SONAR_COUNT = len(OBSTACLE_SONAR_SECTORS)
 OBSERVATION_DIM = 10 + (4 * OBSTACLE_SONAR_COUNT) + 5
+TARGET_MARKER_NAME = "rl_target_marker"
+TARGET_MARKER_SDF = """
+<sdf version="1.6">
+  <model name="rl_target_marker">
+    <static>true</static>
+    <link name="target_link">
+      <visual name="target_visual">
+        <geometry>
+          <sphere>
+            <radius>0.18</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <ambient>0.0 1.0 0.1 1.0</ambient>
+          <diffuse>0.0 1.0 0.1 1.0</diffuse>
+          <emissive>0.0 0.7 0.05 1.0</emissive>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
+"""
 
 
 class DroneRosBridge(Node):
@@ -65,11 +93,17 @@ class DroneRosBridge(Node):
         self.sonar_min_range = 0.02
         self.sonar_max_range = 10.0
         self.last_pose_time: float | None = None
+        self.target_marker_enabled = SpawnEntity is not None and DeleteEntity is not None
+        self.target_marker_warning_logged = False
+        self.target_marker_spawned = False
 
         self.cmd_pub = self.create_publisher(Twist, f"{ns}/cmd_vel", 10)
         # Reset publishes /takeoff before PPO starts controlling each episode.
         self.takeoff_pub = self.create_publisher(Empty, f"{ns}/takeoff", 10)
         self.reset_pub = self.create_publisher(Empty, f"{ns}/reset", 10)
+        if self.target_marker_enabled:
+            self.spawn_entity_client = self.create_client(SpawnEntity, "/spawn_entity")
+            self.delete_entity_client = self.create_client(DeleteEntity, "/delete_entity")
 
         self.create_subscription(Pose, f"{ns}/gt_pose", self._pose_cb, 10)
         self.create_subscription(Twist, f"{ns}/gt_vel", self._vel_cb, 10)
@@ -139,6 +173,50 @@ class DroneRosBridge(Node):
 
     def stop(self) -> None:
         self.publish_velocity(np.zeros(3, dtype=np.float32))
+
+    def update_target_marker(self, target: np.ndarray) -> None:
+        """Show the current RL target in Gazebo as a small green sphere."""
+        if not self.target_marker_enabled:
+            if not self.target_marker_warning_logged:
+                self.get_logger().warning(
+                    "gazebo_msgs is unavailable; Gazebo target marker is disabled"
+                )
+                self.target_marker_warning_logged = True
+            return
+
+        if not self.spawn_entity_client.wait_for_service(timeout_sec=0.2):
+            if not self.target_marker_warning_logged:
+                self.get_logger().warning(
+                    "/spawn_entity is unavailable; Gazebo target marker is disabled"
+                )
+                self.target_marker_warning_logged = True
+            return
+
+        if self.target_marker_spawned and self.delete_entity_client.wait_for_service(
+            timeout_sec=0.2
+        ):
+            delete_req = DeleteEntity.Request()
+            delete_req.name = TARGET_MARKER_NAME
+            delete_future = self.delete_entity_client.call_async(delete_req)
+            rclpy.spin_until_future_complete(self, delete_future, timeout_sec=0.5)
+
+        spawn_req = SpawnEntity.Request()
+        spawn_req.name = TARGET_MARKER_NAME
+        spawn_req.xml = TARGET_MARKER_SDF
+        spawn_req.robot_namespace = ""
+        spawn_req.reference_frame = "world"
+        spawn_req.initial_pose.position.x = float(target[0])
+        spawn_req.initial_pose.position.y = float(target[1])
+        spawn_req.initial_pose.position.z = float(target[2])
+        spawn_req.initial_pose.orientation.w = 1.0
+        spawn_future = self.spawn_entity_client.call_async(spawn_req)
+        rclpy.spin_until_future_complete(self, spawn_future, timeout_sec=0.8)
+
+        if spawn_future.done() and spawn_future.result() is not None:
+            self.target_marker_spawned = True
+        elif not self.target_marker_warning_logged:
+            self.get_logger().warning("Gazebo target marker spawn did not complete")
+            self.target_marker_warning_logged = True
 
     def reset_and_takeoff(self, takeoff_altitude: float = 0.5, timeout_sec: float = 12.0) -> None:
         self.stop()
@@ -251,6 +329,7 @@ class DroneSonarAvoidEnv(gym.Env):
         super().reset(seed=seed)
         if options and "target" in options:
             self.target = np.array(options["target"], dtype=np.float32)
+        self.ros.update_target_marker(self.target)
 
         self.step_count = 0
         self.last_status = "running"
