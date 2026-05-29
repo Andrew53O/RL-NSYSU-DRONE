@@ -137,6 +137,7 @@ class BestTrainingModelCallback(BaseCallback):
     - best_episode_model.zip: highest single episode reward
     - best_average_model.zip: highest recent moving-average reward
     - best_success_model.zip: highest recent strict success rate
+    - best_precision_model.zip: best strict target-error ranking
     """
 
     def __init__(self, best_model_dir: Path, window: int = 20, verbose: int = 0) -> None:
@@ -149,6 +150,7 @@ class BestTrainingModelCallback(BaseCallback):
         self.best_average_reward = float("-inf")
         self.best_success_rate = float("-inf")
         self.best_success_average_reward = float("-inf")
+        self.best_precision_key: tuple[int, float, float, float] | None = None
         self.best_summary_path = best_model_dir / "best_summary.csv"
 
     def _on_training_start(self) -> None:
@@ -163,6 +165,10 @@ class BestTrainingModelCallback(BaseCallback):
                     "status",
                     "recent_average_reward",
                     "recent_success_rate",
+                    "final_distance_to_target",
+                    "abs_final_dx",
+                    "abs_final_dz",
+                    "precision_success",
                     "saved",
                 ],
             )
@@ -183,6 +189,22 @@ class BestTrainingModelCallback(BaseCallback):
             recent_average = sum(recent_rewards) / len(recent_rewards)
             recent_successes = self.episode_successes[-self.window :]
             recent_success_rate = sum(recent_successes) / len(recent_successes)
+            final_distance = float(info.get("distance_to_target", float("inf")))
+            final_x = float(info.get("x", float("nan")))
+            final_z = float(info.get("z", float("nan")))
+            target = info.get("target")
+            if target is not None:
+                abs_final_dx = abs(float(target[0]) - final_x)
+                abs_final_dz = abs(float(target[2]) - final_z)
+            else:
+                abs_final_dx = float("inf")
+                abs_final_dz = float("inf")
+            precision_key = (
+                success,
+                -final_distance,
+                -abs_final_dz,
+                -abs_final_dx,
+            )
             saved: list[str] = []
 
             if reward > self.best_episode_reward:
@@ -211,6 +233,11 @@ class BestTrainingModelCallback(BaseCallback):
                 self.model.save(self.best_model_dir / "best_success_model.zip")
                 saved.append("best_success_model")
 
+            if self.best_precision_key is None or precision_key > self.best_precision_key:
+                self.best_precision_key = precision_key
+                self.model.save(self.best_model_dir / "best_precision_model.zip")
+                saved.append("best_precision_model")
+
             if saved:
                 with self.best_summary_path.open("a", newline="") as fp:
                     writer = csv.DictWriter(
@@ -222,6 +249,10 @@ class BestTrainingModelCallback(BaseCallback):
                             "status",
                             "recent_average_reward",
                             "recent_success_rate",
+                            "final_distance_to_target",
+                            "abs_final_dx",
+                            "abs_final_dz",
+                            "precision_success",
                             "saved",
                         ],
                     )
@@ -233,6 +264,10 @@ class BestTrainingModelCallback(BaseCallback):
                             "status": status,
                             "recent_average_reward": recent_average,
                             "recent_success_rate": recent_success_rate,
+                            "final_distance_to_target": final_distance,
+                            "abs_final_dx": abs_final_dx,
+                            "abs_final_dz": abs_final_dz,
+                            "precision_success": success,
                             "saved": "+".join(saved),
                         }
                     )
@@ -505,6 +540,7 @@ def write_run_config(
                 "best_episode_model.zip",
                 "best_average_model.zip",
                 "best_success_model.zip",
+                "best_precision_model.zip",
             ],
         },
         "observation_normalization": {

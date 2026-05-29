@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 from statistics import mean
 
+import numpy as np
+
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 try:
@@ -133,6 +135,8 @@ def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str
     min_down_sonar = float("inf")
     safety_filter_overrides = 0
     side_near_misses = 0
+    command_sum = np.zeros(3, dtype=np.float64)
+    command_count = 0
     status = "running"
     info = {}
     steps = 0
@@ -143,6 +147,8 @@ def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str
 
     for steps in range(1, max_steps + 1):
         action, _ = model.predict(obs, deterministic=True)
+        command_sum += np.asarray(action, dtype=np.float64)
+        command_count += 1
         obs, reward, terminated, truncated, info = env.step(action)
         total_reward += float(reward)
         min_obstacle_sonar = min(
@@ -159,15 +165,24 @@ def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str
         if terminated or truncated:
             break
 
+    average_command = (
+        command_sum / command_count if command_count > 0 else np.zeros(3, dtype=np.float64)
+    )
     return {
         "status": status,
         "final_distance_to_target": float(info["distance_to_target"]),
         "final_x": float(info["x"]),
         "final_y": float(info["y"]),
         "final_z": float(info["z"]),
+        "final_vx": float(info["vx"]),
+        "final_vy": float(info["vy"]),
+        "final_vz": float(info["vz"]),
         "final_dx": float(env.target[0] - float(info["x"])),
         "final_dy": float(env.target[1] - float(info["y"])),
         "final_dz": float(env.target[2] - float(info["z"])),
+        "average_cmd_vx": float(average_command[0]),
+        "average_cmd_vy": float(average_command[1]),
+        "average_cmd_vz": float(average_command[2]),
         "episode_return": total_reward,
         "minimum_obstacle_sonar_range": min_obstacle_sonar,
         "minimum_down_sonar_range": min_down_sonar,
@@ -186,9 +201,15 @@ def write_eval_csv(path: Path, rows: list[dict[str, float | int | str]]) -> None
         "final_x",
         "final_y",
         "final_z",
+        "final_vx",
+        "final_vy",
+        "final_vz",
         "final_dx",
         "final_dy",
         "final_dz",
+        "average_cmd_vx",
+        "average_cmd_vy",
+        "average_cmd_vz",
         "episode_return",
         "minimum_obstacle_sonar_range",
         "minimum_down_sonar_range",
@@ -226,6 +247,9 @@ def print_summary(rows: list[dict[str, float | int | str]]) -> None:
         "average_distance_to_target: "
         f"{mean(float(row['final_distance_to_target']) for row in rows):.3f}"
     )
+    print(f"average_cmd_vx: {mean(float(row['average_cmd_vx']) for row in rows):.3f}")
+    print(f"average_cmd_vy: {mean(float(row['average_cmd_vy']) for row in rows):.3f}")
+    print(f"average_cmd_vz: {mean(float(row['average_cmd_vz']) for row in rows):.3f}")
     print(
         "average_minimum_obstacle_sonar_distance: "
         f"{mean(float(row['minimum_obstacle_sonar_range']) for row in rows):.3f}"

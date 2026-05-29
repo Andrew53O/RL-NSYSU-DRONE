@@ -214,11 +214,23 @@ ppo_drone.zip
 best/best_episode_model.zip
 best/best_average_model.zip
 best/best_success_model.zip
+best/best_precision_model.zip
 ```
 
 For strict Stage 1 evaluation, `best_success_model.zip` is the preferred
 checkpoint because it is selected using actual episode `status == "success"`
 instead of reward alone.
+
+`best_precision_model.zip` is stricter for Stage 1 debugging: it ranks
+episodes by success first, then lower final distance, lower altitude error, and
+lower x error. This helps when the reward curve looks good but deterministic
+evaluation still times out near the target.
+
+Run016 showed the main Stage 1 failure mode was not sonar interference:
+obstacle ranges stayed safe and the safety filter did not activate. The policy
+was short in `x` and high in `z`, so the reward now penalizes high-altitude
+drift more strongly and evaluation logs average commanded velocity plus final
+velocity for diagnosis.
 
 Each run also saves:
 
