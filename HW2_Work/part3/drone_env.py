@@ -330,7 +330,7 @@ class DroneCurriculumEnv(gym.Env):
 
         self.stage = int(stage)
         self.variant = normalize_variant(self.stage, variant)
-        self.spec = get_stage_spec(self.stage, self.variant)
+        self.stage_spec = get_stage_spec(self.stage, self.variant)
         self.target_override = target_override
         self.max_steps = int(max_steps)
         self.success_distance = float(success_distance)
@@ -371,7 +371,7 @@ class DroneCurriculumEnv(gym.Env):
 
     @property
     def sonar_enabled(self) -> bool:
-        return bool(self.spec.sonar_enabled)
+        return bool(self.stage_spec.sonar_enabled)
 
     @property
     def current_target(self) -> np.ndarray:
@@ -509,36 +509,36 @@ class DroneCurriculumEnv(gym.Env):
     def _sample_targets(self) -> np.ndarray:
         if self.target_override is not None:
             return np.array([self.target_override], dtype=np.float32)
-        if self.spec.sequence_count > 1:
-            targets = [self._sample_one_target(index) for index in range(self.spec.sequence_count)]
+        if self.stage_spec.sequence_count > 1:
+            targets = [self._sample_one_target(index) for index in range(self.stage_spec.sequence_count)]
             return np.array(targets, dtype=np.float32)
         return np.array([self._sample_one_target(0)], dtype=np.float32)
 
     def _sample_one_target(self, index: int) -> tuple[float, float, float]:
-        if self.spec.x_bounds is None and self.spec.z_bounds is None:
-            fixed = self.spec.fixed_targets[min(index, len(self.spec.fixed_targets) - 1)]
+        if self.stage_spec.x_bounds is None and self.stage_spec.z_bounds is None:
+            fixed = self.stage_spec.fixed_targets[min(index, len(self.stage_spec.fixed_targets) - 1)]
             return tuple(float(v) for v in fixed)
-        base = self.spec.fixed_targets[0]
-        x = random.uniform(*self.spec.x_bounds) if self.spec.x_bounds else base[0]
-        z = random.uniform(*self.spec.z_bounds) if self.spec.z_bounds else base[2]
+        base = self.stage_spec.fixed_targets[0]
+        x = random.uniform(*self.stage_spec.x_bounds) if self.stage_spec.x_bounds else base[0]
+        z = random.uniform(*self.stage_spec.z_bounds) if self.stage_spec.z_bounds else base[2]
         y = 0.0
         if self.stage >= 6:
             y = random.uniform(-1.0, 1.0)
         return (float(x), float(y), float(z))
 
     def _axis_progress_reward(self, delta: np.ndarray) -> float:
-        if self.spec.focus == "vertical":
+        if self.stage_spec.focus == "vertical":
             weights = np.array([2.0, 2.0, 12.0], dtype=np.float32)
-        elif self.spec.focus == "horizontal":
+        elif self.stage_spec.focus == "horizontal":
             weights = np.array([12.0, 3.0, 6.0], dtype=np.float32)
         else:
             weights = np.array([9.0, 4.0, 7.0], dtype=np.float32)
         return float(np.dot(weights, delta))
 
     def _stage_precision_penalty(self, x_error: float, y_error: float, z_error: float) -> float:
-        if self.spec.focus == "vertical":
+        if self.stage_spec.focus == "vertical":
             return 0.15 * x_error + 0.15 * y_error + 0.55 * z_error
-        if self.spec.focus == "horizontal":
+        if self.stage_spec.focus == "horizontal":
             return 0.45 * x_error + 0.20 * y_error + 0.45 * z_error
         return 0.35 * x_error + 0.25 * y_error + 0.35 * z_error
 
