@@ -223,6 +223,10 @@ def print_summary(rows: list[dict[str, float | int | str]]) -> None:
     print(f"timeout_rate: {len(timeout_rows) / total:.3f}")
     print(f"average_return: {mean(float(row['episode_return']) for row in rows):.3f}")
     print(
+        "average_distance_to_target: "
+        f"{mean(float(row['final_distance_to_target']) for row in rows):.3f}"
+    )
+    print(
         "average_minimum_obstacle_sonar_distance: "
         f"{mean(float(row['minimum_obstacle_sonar_range']) for row in rows):.3f}"
     )
