@@ -404,8 +404,14 @@ class DroneSonarAvoidEnv(gym.Env):
 
         progress_reward = 0.0
         if self.previous_distance is not None and math.isfinite(current_distance):
-            progress_reward = 5.0 * (self.previous_distance - current_distance)
+            progress_reward = 8.0 * (self.previous_distance - current_distance)
         self.previous_distance = current_distance
+
+        direction_reward = 0.0
+        if math.isfinite(current_distance) and current_distance > 1e-6:
+            target_direction = (self.target - np.array([x_pos, y_pos, z_pos])) / current_distance
+            command_alignment = float(np.dot(filtered_action, target_direction))
+            direction_reward = 0.10 * float(np.clip(command_alignment, -1.0, 1.0))
 
         distance_penalty = 0.02 * reward_distance
         mean_risk_penalty = 2.0 * obstacle_mean_risk**2
@@ -418,6 +424,7 @@ class DroneSonarAvoidEnv(gym.Env):
 
         reward = (
             progress_reward
+            + direction_reward
             - distance_penalty
             - mean_risk_penalty
             - max_risk_penalty
