@@ -25,7 +25,6 @@ from drone_env import DroneSonarAvoidEnv
 PART2_DIR = Path(__file__).resolve().parent
 LOG_DIR = PART2_DIR / "logs"
 DEFAULT_MODEL_PATH = PART2_DIR / "models" / "ppo_drone.zip"
-DEFAULT_EVAL_CSV = LOG_DIR / "eval_metrics.csv"
 SIDE_NEAR_MISS_DISTANCE = 0.5
 
 
@@ -41,7 +40,27 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--target", nargs=3, type=float, default=(1.0, 0.0, 0.8))
     parser.add_argument("--episodes", type=int, default=1)
-    parser.add_argument("--csv", type=Path, default=DEFAULT_EVAL_CSV)
+    parser.add_argument(
+        "--csv",
+        type=Path,
+        default=None,
+        help=(
+            "Optional explicit CSV path. By default, eval logs are saved as "
+            "logs/eval/stageN/runXXX/eval001.csv based on the model path."
+        ),
+    )
+    parser.add_argument(
+        "--stage",
+        type=int,
+        default=None,
+        help="Optional stage override for the default eval log folder.",
+    )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Optional run-name override for the default eval log folder.",
+    )
     parser.add_argument(
         "--overwrite",
         action="store_true",
@@ -65,6 +84,43 @@ def next_available_path(path: Path) -> Path:
         if not candidate.exists():
             return candidate
         index += 1
+
+
+def _infer_stage_and_run(model_path: Path) -> tuple[str, str]:
+    """Infer eval folder names from models/stageN/runXXX/... paths."""
+    resolved_parts = model_path.resolve().parts
+    for index, part in enumerate(resolved_parts):
+        if part.startswith("stage") and index + 1 < len(resolved_parts):
+            return part, resolved_parts[index + 1]
+
+    # Fallback for old flat checkpoints such as models/ppo_drone_stage1.zip.
+    stem = model_path.stem
+    for token in stem.replace("-", "_").split("_"):
+        if token.startswith("stage") and token[5:].isdigit():
+            return token, stem
+    return "stage_unknown", stem or "model"
+
+
+def _next_numbered_eval_path(eval_dir: Path) -> Path:
+    index = 1
+    while True:
+        candidate = eval_dir / f"eval{index:03d}.csv"
+        if not candidate.exists():
+            return candidate
+        index += 1
+
+
+def default_eval_csv_path(
+    model_path: Path,
+    stage_override: int | None,
+    run_name_override: str | None,
+) -> Path:
+    stage_name, run_name = _infer_stage_and_run(model_path)
+    if stage_override is not None:
+        stage_name = f"stage{stage_override}"
+    if run_name_override is not None:
+        run_name = run_name_override
+    return _next_numbered_eval_path(LOG_DIR / "eval" / stage_name / run_name)
 
 
 def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str, float | int | str]:
@@ -174,7 +230,10 @@ def main() -> None:
         raise SystemExit(f"Model not found: {args.model}")
     if args.episodes < 1:
         raise SystemExit("--episodes must be at least 1")
-    csv_path = args.csv if args.overwrite else next_available_path(args.csv)
+    if args.csv is not None:
+        csv_path = args.csv if args.overwrite else next_available_path(args.csv)
+    else:
+        csv_path = default_eval_csv_path(args.model, args.stage, args.run_name)
 
     env = DroneSonarAvoidEnv(
         target=tuple(args.target),
