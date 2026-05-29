@@ -303,6 +303,10 @@ class DroneSonarAvoidEnv(gym.Env):
         self.down_sonar_lift_distance = 0.35
         self.side_sonar_push_distance = 0.45
         self.sonar_caution_distance = 1.5
+        # Obstacle-facing sonar needs a wider caution distance. The downward
+        # sonar is only ground-safety, so it should not punish normal low
+        # Stage-1 flight at 0.8 m altitude.
+        self.down_sonar_caution_distance = 0.45
         # The simulator takeoff helper sometimes stabilizes below 0.8 m or
         # takes longer than expected after reset. PPO does not learn takeoff;
         # reset only needs a reliable airborne start above the crash threshold.
@@ -509,7 +513,7 @@ class DroneSonarAvoidEnv(gym.Env):
         obstacle_risk = self._ranges_to_risk(obstacle_sonar)
         obstacle_trend = previous_obstacle_norm - obstacle_norm
         down_norm = self._normalize_range(down_sonar_range)
-        down_sonar_risk = float(self._range_to_risk(down_sonar_range))
+        down_sonar_risk = float(self._down_range_to_risk(down_sonar_range))
 
         front_sonar = obstacle_sonar[:5]
         front_risk = obstacle_risk[:5]
@@ -613,6 +617,12 @@ class DroneSonarAvoidEnv(gym.Env):
 
     def _range_to_risk(self, sonar_range: float) -> float:
         risk = (self.sonar_caution_distance - sonar_range) / self.sonar_caution_distance
+        return float(np.clip(risk, 0.0, 1.0))
+
+    def _down_range_to_risk(self, sonar_range: float) -> float:
+        risk = (
+            self.down_sonar_caution_distance - sonar_range
+        ) / self.down_sonar_caution_distance
         return float(np.clip(risk, 0.0, 1.0))
 
     def _ranges_to_risk(self, sonar_ranges: np.ndarray) -> np.ndarray:
