@@ -134,6 +134,7 @@ class BestTrainingModelCallback(BaseCallback):
     callback watches finished Monitor episodes and saves two extra checkpoints:
     - best_episode_model.zip: highest single episode reward
     - best_average_model.zip: highest recent moving-average reward
+    - best_success_model.zip: highest recent strict success rate
     """
 
     def __init__(self, best_model_dir: Path, window: int = 20, verbose: int = 0) -> None:
@@ -141,8 +142,11 @@ class BestTrainingModelCallback(BaseCallback):
         self.best_model_dir = best_model_dir
         self.window = max(1, window)
         self.episode_rewards: list[float] = []
+        self.episode_successes: list[int] = []
         self.best_episode_reward = float("-inf")
         self.best_average_reward = float("-inf")
+        self.best_success_rate = float("-inf")
+        self.best_success_average_reward = float("-inf")
         self.best_summary_path = best_model_dir / "best_summary.csv"
 
     def _on_training_start(self) -> None:
@@ -154,7 +158,9 @@ class BestTrainingModelCallback(BaseCallback):
                     "episode",
                     "timesteps",
                     "reward",
+                    "status",
                     "recent_average_reward",
+                    "recent_success_rate",
                     "saved",
                 ],
             )
@@ -167,9 +173,14 @@ class BestTrainingModelCallback(BaseCallback):
                 continue
 
             reward = float(episode_info["r"])
+            status = str(info.get("status", "unknown"))
+            success = 1 if status == "success" else 0
             self.episode_rewards.append(reward)
+            self.episode_successes.append(success)
             recent_rewards = self.episode_rewards[-self.window :]
             recent_average = sum(recent_rewards) / len(recent_rewards)
+            recent_successes = self.episode_successes[-self.window :]
+            recent_success_rate = sum(recent_successes) / len(recent_successes)
             saved: list[str] = []
 
             if reward > self.best_episode_reward:
@@ -182,6 +193,21 @@ class BestTrainingModelCallback(BaseCallback):
                 self.model.save(self.best_model_dir / "best_average_model.zip")
                 saved.append("best_average_model")
 
+            # Reward is useful but imperfect: a near-target timeout can score
+            # well while still failing the strict 0.4 m Stage-1 criterion. This
+            # checkpoint prioritizes actual episode status == "success".
+            has_recent_success = sum(recent_successes) > 0
+            better_success_rate = recent_success_rate > self.best_success_rate
+            tied_rate_better_reward = (
+                recent_success_rate == self.best_success_rate
+                and recent_average > self.best_success_average_reward
+            )
+            if has_recent_success and (better_success_rate or tied_rate_better_reward):
+                self.best_success_rate = recent_success_rate
+                self.best_success_average_reward = recent_average
+                self.model.save(self.best_model_dir / "best_success_model.zip")
+                saved.append("best_success_model")
+
             if saved:
                 with self.best_summary_path.open("a", newline="") as fp:
                     writer = csv.DictWriter(
@@ -190,7 +216,9 @@ class BestTrainingModelCallback(BaseCallback):
                             "episode",
                             "timesteps",
                             "reward",
+                            "status",
                             "recent_average_reward",
+                            "recent_success_rate",
                             "saved",
                         ],
                     )
@@ -199,7 +227,9 @@ class BestTrainingModelCallback(BaseCallback):
                             "episode": len(self.episode_rewards),
                             "timesteps": self.num_timesteps,
                             "reward": reward,
+                            "status": status,
                             "recent_average_reward": recent_average,
+                            "recent_success_rate": recent_success_rate,
                             "saved": "+".join(saved),
                         }
                     )
@@ -208,7 +238,9 @@ class BestTrainingModelCallback(BaseCallback):
                     print(
                         "Saved "
                         f"{', '.join(saved)} at episode {len(self.episode_rewards)} "
-                        f"(reward={reward:.3f}, avg={recent_average:.3f})"
+                        f"(status={status}, reward={reward:.3f}, "
+                        f"avg={recent_average:.3f}, "
+                        f"success_rate={recent_success_rate:.3f})"
                     )
 
         return True
