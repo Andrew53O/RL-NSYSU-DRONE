@@ -67,6 +67,7 @@ class DroneRosBridge(Node):
         self.last_pose_time: float | None = None
 
         self.cmd_pub = self.create_publisher(Twist, f"{ns}/cmd_vel", 10)
+        # Reset publishes /takeoff before PPO starts controlling each episode.
         self.takeoff_pub = self.create_publisher(Empty, f"{ns}/takeoff", 10)
         self.reset_pub = self.create_publisher(Empty, f"{ns}/reset", 10)
 
@@ -139,7 +140,7 @@ class DroneRosBridge(Node):
     def stop(self) -> None:
         self.publish_velocity(np.zeros(3, dtype=np.float32))
 
-    def reset_and_takeoff(self, takeoff_altitude: float = 0.8, timeout_sec: float = 8.0) -> None:
+    def reset_and_takeoff(self, takeoff_altitude: float = 0.5, timeout_sec: float = 12.0) -> None:
         self.stop()
         self.pose = None
         self.down_sonar_range = None
@@ -158,9 +159,16 @@ class DroneRosBridge(Node):
                 self.stop()
                 return
 
-        self.get_logger().warning(
-            f"Takeoff wait timed out before reaching {takeoff_altitude:.2f} m"
-        )
+        if self.pose is not None:
+            self.get_logger().warning(
+                "Takeoff wait timed out before reaching "
+                f"{takeoff_altitude:.2f} m; last_z={self.pose[2]:.2f} m"
+            )
+        else:
+            self.get_logger().warning(
+                "Takeoff wait timed out before receiving pose at "
+                f"{takeoff_altitude:.2f} m"
+            )
 
 
 class DroneSonarAvoidEnv(gym.Env):
@@ -195,7 +203,10 @@ class DroneSonarAvoidEnv(gym.Env):
         self.down_sonar_lift_distance = 0.35
         self.side_sonar_push_distance = 0.45
         self.sonar_caution_distance = 1.5
-        self.takeoff_altitude = 0.8
+        # The simulator takeoff helper sometimes stabilizes below 0.8 m or
+        # takes longer than expected after reset. PPO does not learn takeoff;
+        # reset only needs a reliable airborne start above the crash threshold.
+        self.takeoff_altitude = 0.5
         self.max_sonar_range = 10.0
         self.distance_norm = 12.0
 
