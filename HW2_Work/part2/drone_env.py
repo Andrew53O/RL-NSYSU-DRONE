@@ -333,6 +333,7 @@ class DroneSonarAvoidEnv(gym.Env):
 
         self.step_count = 0
         self.previous_distance: float | None = None
+        self.previous_abs_target_error: np.ndarray | None = None
         self.previous_obstacle_sonar = np.full(
             OBSTACLE_SONAR_COUNT,
             self.max_sonar_range,
@@ -377,6 +378,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.step_count = 0
         self.last_status = "running"
         self.previous_action = np.zeros(3, dtype=np.float32)
+        self.previous_abs_target_error = None
         self.last_action_was_filtered = False
         self.recent_obstacle_min.clear()
         self.previous_obstacle_sonar = self._safe_obstacle_sonar_ranges()
@@ -400,6 +402,7 @@ class DroneSonarAvoidEnv(gym.Env):
         obs = self._get_obs()
         self._log_position_if_needed(force=True)
         self.previous_distance = float(self.last_observation_info["distance_to_target"])
+        self.previous_abs_target_error = self._current_abs_target_error()
         return obs, self._info(obs)
 
     def step(
@@ -435,6 +438,10 @@ class DroneSonarAvoidEnv(gym.Env):
         x_error = abs(float(target_error[0]))
         y_error = abs(float(target_error[1]))
         z_error = abs(float(target_error[2]))
+        current_abs_target_error = np.array(
+            [x_error, y_error, z_error],
+            dtype=np.float32,
+        )
         above_target = max(0.0, z_pos - float(self.target[2]))
 
         progress_reward = 0.0
@@ -442,6 +449,20 @@ class DroneSonarAvoidEnv(gym.Env):
             progress_scale = 18.0 if current_distance < 1.0 else 8.0
             progress_reward = progress_scale * (self.previous_distance - current_distance)
         self.previous_distance = current_distance
+
+        axis_progress_reward = 0.0
+        if self.previous_abs_target_error is not None:
+            axis_error_delta = self.previous_abs_target_error - current_abs_target_error
+            # Dense axis-specific progress keeps the true target at x=1.0
+            # without changing observation/action shape. The x weight is largest
+            # because recent Stage-1 runs learned altitude but stopped short in
+            # forward progress.
+            axis_progress_reward = float(
+                12.0 * axis_error_delta[0]
+                + 3.0 * axis_error_delta[1]
+                + 4.0 * axis_error_delta[2]
+            )
+        self.previous_abs_target_error = current_abs_target_error.copy()
 
         direction_reward = 0.0
         forward_direction_reward = 0.0
@@ -507,6 +528,7 @@ class DroneSonarAvoidEnv(gym.Env):
 
         reward = (
             progress_reward
+            + axis_progress_reward
             + direction_reward
             + forward_direction_reward
             + vertical_direction_reward
@@ -582,6 +604,12 @@ class DroneSonarAvoidEnv(gym.Env):
         self.ros.destroy_node()
         if self._owns_rclpy and rclpy.ok():
             rclpy.shutdown()
+
+    def _current_abs_target_error(self) -> np.ndarray | None:
+        pose = self.ros.pose
+        if pose is None:
+            return None
+        return np.abs(self.target - pose).astype(np.float32)
 
     def _wait_for_initial_state(
         self,
