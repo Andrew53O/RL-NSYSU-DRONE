@@ -507,6 +507,14 @@ def write_run_config(
                 "best_success_model.zip",
             ],
         },
+        "observation_normalization": {
+            "pose_xy_norm": 8.0,
+            "pose_z_norm": 5.0,
+            "target_xy_delta_norm": 3.0,
+            "target_z_delta_norm": 1.5,
+            "target_distance_norm": 3.0,
+            "sonar_range_norm": 10.0,
+        },
         "resume_from": str(resume_path) if resume_path is not None else None,
         "outputs": {
             "model_dir": str(run_model_dir),

@@ -330,6 +330,12 @@ class DroneSonarAvoidEnv(gym.Env):
         self.takeoff_altitude = 0.5
         self.max_sonar_range = 10.0
         self.distance_norm = 12.0
+        # Pose uses arena-scale normalization, but Stage-1 target deltas are
+        # only about 1 m. Smaller norms make dx/dy/dz/distance visible to PPO
+        # without changing the 43-value observation shape.
+        self.target_xy_delta_norm = 3.0
+        self.target_z_delta_norm = 1.5
+        self.target_distance_norm = 3.0
 
         self.step_count = 0
         self.previous_distance: float | None = None
@@ -353,7 +359,7 @@ class DroneSonarAvoidEnv(gym.Env):
         )
 
         # Observation:
-        # [x/8, y/8, z/5, vx, vy, vz/0.5, dx/8, dy/8, dz/5, distance/12,
+        # [x/8, y/8, z/5, vx, vy, vz/0.5, dx/3, dy/3, dz/1.5, distance/3,
         #  seven normalized obstacle ranges, seven obstacle risks,
         #  seven previous normalized obstacle ranges, seven obstacle range trends,
         #  min_recent_obstacle/10, down_sonar/10, down_sonar_risk,
@@ -685,10 +691,10 @@ class DroneSonarAvoidEnv(gym.Env):
                         velocity[0],
                         velocity[1],
                         velocity[2] / 0.5,
-                        delta[0] / self.xy_limit,
-                        delta[1] / self.xy_limit,
-                        delta[2] / self.max_altitude,
-                        distance / self.distance_norm,
+                        delta[0] / self.target_xy_delta_norm,
+                        delta[1] / self.target_xy_delta_norm,
+                        delta[2] / self.target_z_delta_norm,
+                        distance / self.target_distance_norm,
                     ],
                     dtype=np.float32,
                 ),
