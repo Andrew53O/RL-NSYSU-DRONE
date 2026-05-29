@@ -427,6 +427,7 @@ class DroneCurriculumEnv(gym.Env):
         x_error = abs(dx)
         y_error = abs(dy)
         z_error = abs(dz)
+        target_reached = self._target_reached(x_error, y_error, z_error, distance)
         velocity_norm = float(np.linalg.norm(self.ros.velocity))
 
         reward = 0.0
@@ -478,7 +479,7 @@ class DroneCurriculumEnv(gym.Env):
             reward -= 100.0
             terminated = True
             status = "unsafe_sonar"
-        elif distance < self.success_distance:
+        elif target_reached:
             reward += 80.0
             self.targets_reached += 1
             if self.target_index + 1 >= len(self.targets):
@@ -537,10 +538,17 @@ class DroneCurriculumEnv(gym.Env):
 
     def _stage_precision_penalty(self, x_error: float, y_error: float, z_error: float) -> float:
         if self.stage_spec.focus == "vertical":
-            return 0.15 * x_error + 0.15 * y_error + 0.55 * z_error
+            return 0.45 * x_error + 0.45 * y_error + 0.65 * z_error
         if self.stage_spec.focus == "horizontal":
             return 0.45 * x_error + 0.20 * y_error + 0.45 * z_error
         return 0.35 * x_error + 0.25 * y_error + 0.35 * z_error
+
+    def _target_reached(self, x_error: float, y_error: float, z_error: float, distance: float) -> bool:
+        if self.stage_spec.focus == "vertical":
+            lateral_error = math.hypot(x_error, y_error)
+            lateral_tolerance = max(0.20, 1.5 * self.success_distance)
+            return z_error < self.success_distance and lateral_error < lateral_tolerance
+        return distance < self.success_distance
 
     def _wait_for_state(self, timeout_sec: float = 5.0, min_altitude: float | None = None) -> None:
         deadline = time.monotonic() + timeout_sec
