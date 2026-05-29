@@ -143,6 +143,12 @@ def parse_args() -> argparse.Namespace:
     # max_steps is the episode time limit. If rollout/ep_len_mean stays at 400,
     # the policy is usually timing out instead of reaching the target.
     parser.add_argument("--max-steps", type=int, default=800)
+    parser.add_argument(
+        "--success-distance",
+        type=float,
+        default=0.4,
+        help="Distance in meters that counts as reaching the target.",
+    )
     parser.add_argument("--stage", type=int, choices=sorted(CURRICULUM_STAGES), default=1)
     parser.add_argument(
         "--target",
@@ -166,6 +172,10 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Print drone position, target, and distance every N env steps. 0 disables it.",
     )
+    parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--n-steps", type=int, default=512)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--gamma", type=float, default=0.99)
     return parser.parse_args()
 
 
@@ -296,6 +306,7 @@ def main() -> None:
         target=base_target,
         max_steps=args.max_steps,
         log_position_every=args.log_position_every,
+        success_distance=args.success_distance,
     )
     env = CurriculumTargetWrapper(env, stage_config)
 
@@ -321,14 +332,14 @@ def main() -> None:
                 "MlpPolicy",
                 env,
                 verbose=1,
-                learning_rate=3e-4,
+                learning_rate=args.learning_rate,
                 # n_steps is how many environment steps PPO collects before one
                 # policy update. A smaller value makes smoke tests finish faster.
-                n_steps=256 if args.smoke else 512,
-                batch_size=64,
+                n_steps=256 if args.smoke else args.n_steps,
+                batch_size=args.batch_size,
                 # gamma controls how much future reward matters. 0.99 is common for
                 # navigation tasks because reaching the target may require many steps.
-                gamma=0.99,
+                gamma=args.gamma,
                 # For this MLP policy, CPU is usually faster and avoids GPU warnings.
                 device="cpu",
             )

@@ -282,6 +282,7 @@ class DroneSonarAvoidEnv(gym.Env):
         namespace: str = "/simple_drone",
         step_dt: float = 0.1,
         log_position_every: int = 0,
+        success_distance: float = 0.4,
     ) -> None:
         super().__init__()
 
@@ -296,7 +297,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.step_dt = float(step_dt)
         self.log_position_every = max(0, int(log_position_every))
 
-        self.target_reached_distance = 0.75
+        self.target_reached_distance = float(success_distance)
         self.min_altitude = 0.25
         self.max_altitude = 5.0
         self.xy_limit = 8.0
@@ -421,6 +422,11 @@ class DroneSonarAvoidEnv(gym.Env):
             direction_reward = 0.10 * float(np.clip(command_alignment, -1.0, 1.0))
 
         distance_penalty = 0.02 * reward_distance
+        near_target_precision_penalty = 0.0
+        near_target_velocity_penalty = 0.0
+        if math.isfinite(current_distance) and current_distance < 1.0:
+            near_target_precision_penalty = 0.25 * current_distance
+            near_target_velocity_penalty = 0.05 * float(np.linalg.norm(self.ros.velocity))
         mean_risk_penalty = 2.0 * obstacle_mean_risk**2
         max_risk_penalty = 4.0 * obstacle_max_risk**2
         trend_penalty = 1.5 * max_approach_trend
@@ -433,6 +439,8 @@ class DroneSonarAvoidEnv(gym.Env):
             progress_reward
             + direction_reward
             - distance_penalty
+            - near_target_precision_penalty
+            - near_target_velocity_penalty
             - mean_risk_penalty
             - max_risk_penalty
             - trend_penalty

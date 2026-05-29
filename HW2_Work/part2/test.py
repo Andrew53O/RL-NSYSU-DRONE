@@ -30,6 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Test PPO for NSYSU Drone Task D.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
     parser.add_argument("--max-steps", type=int, default=800)
+    parser.add_argument(
+        "--success-distance",
+        type=float,
+        default=0.4,
+        help="Distance in meters that counts as reaching the target.",
+    )
     parser.add_argument("--target", nargs=3, type=float, default=(1.0, 0.0, 0.8))
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--csv", type=Path, default=DEFAULT_EVAL_CSV)
@@ -77,6 +83,9 @@ def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str
     return {
         "status": status,
         "final_distance_to_target": float(info["distance_to_target"]),
+        "final_x": float(info["x"]),
+        "final_y": float(info["y"]),
+        "final_z": float(info["z"]),
         "episode_return": total_reward,
         "minimum_obstacle_sonar_range": min_obstacle_sonar,
         "minimum_down_sonar_range": min_down_sonar,
@@ -92,6 +101,9 @@ def write_eval_csv(path: Path, rows: list[dict[str, float | int | str]]) -> None
         "episode",
         "status",
         "final_distance_to_target",
+        "final_x",
+        "final_y",
+        "final_z",
         "episode_return",
         "minimum_obstacle_sonar_range",
         "minimum_down_sonar_range",
@@ -148,6 +160,7 @@ def main() -> None:
         target=tuple(args.target),
         max_steps=args.max_steps,
         log_position_every=args.log_position_every,
+        success_distance=args.success_distance,
     )
     model = PPO.load(args.model, device="cpu")
     rows: list[dict[str, float | int | str]] = []
