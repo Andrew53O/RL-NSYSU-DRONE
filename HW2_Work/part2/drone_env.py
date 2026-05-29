@@ -440,26 +440,35 @@ class DroneSonarAvoidEnv(gym.Env):
         self.previous_distance = current_distance
 
         direction_reward = 0.0
+        vertical_direction_reward = 0.0
         if math.isfinite(current_distance) and current_distance > 1e-6:
             target_direction = target_error / current_distance
             command_alignment = float(np.dot(filtered_action, target_direction))
             direction_reward = 0.35 * float(np.clip(command_alignment, -1.0, 1.0))
+            if abs(float(target_error[2])) > 0.05:
+                desired_vz_sign = math.copysign(1.0, float(target_error[2]))
+                vertical_alignment = desired_vz_sign * float(filtered_action[2] / 0.5)
+                vertical_direction_reward = 0.18 * float(np.clip(vertical_alignment, -1.0, 1.0))
 
         distance_penalty = 0.06 * reward_distance
         near_target_bonus = 0.0
         near_target_precision_penalty = 0.0
         near_target_axis_penalty = 0.0
+        near_target_high_penalty = 0.0
         near_target_lateral_penalty = 0.0
         near_target_velocity_penalty = 0.0
         if math.isfinite(current_distance) and current_distance < 1.0:
             x_error = abs(float(target_error[0]))
             y_error = abs(float(target_error[1]))
             z_error = abs(float(target_error[2]))
+            above_target = max(0.0, z_pos - float(self.target[2]))
             velocity_norm = float(np.linalg.norm(self.ros.velocity))
 
             # The strict 0.4 m success radius needs dense feedback inside the
             # last meter. Without this, PPO often hovers around 0.65-0.75 m and
-            # gets a timeout instead of learning the final correction.
+            # gets a timeout instead of learning the final correction. Recent
+            # Stage-1 evals also showed a consistent "too high" bias, so the
+            # vertical terms are stronger than before when close to the target.
             near_target_bonus = 0.20 * (1.0 - current_distance)
             if current_distance < 0.7:
                 near_target_bonus += 0.25 * (0.7 - current_distance)
@@ -467,7 +476,8 @@ class DroneSonarAvoidEnv(gym.Env):
                 near_target_bonus += 0.45 * (0.5 - current_distance)
 
             near_target_precision_penalty = 0.30 * current_distance
-            near_target_axis_penalty = 0.18 * x_error + 0.16 * y_error + 0.08 * z_error
+            near_target_axis_penalty = 0.18 * x_error + 0.16 * y_error + 0.24 * z_error
+            near_target_high_penalty = 0.22 * above_target
             near_target_lateral_penalty = 0.12 * y_error
             near_target_velocity_penalty = 0.08 * velocity_norm
         mean_risk_penalty = 2.0 * obstacle_mean_risk**2
@@ -481,10 +491,12 @@ class DroneSonarAvoidEnv(gym.Env):
         reward = (
             progress_reward
             + direction_reward
+            + vertical_direction_reward
             + near_target_bonus
             - distance_penalty
             - near_target_precision_penalty
             - near_target_axis_penalty
+            - near_target_high_penalty
             - near_target_lateral_penalty
             - near_target_velocity_penalty
             - mean_risk_penalty
