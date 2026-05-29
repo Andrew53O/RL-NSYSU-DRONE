@@ -87,11 +87,14 @@ python3 train.py --stage 4 --timesteps 50000
 Expected outputs:
 
 ```text
-HW2_Work/part2/models/ppo_drone.zip
-HW2_Work/part2/models/ppo_drone_stage1.zip
-HW2_Work/part2/logs/monitor_stage1.csv
-HW2_Work/part2/logs/training_curve_stage1.png
+HW2_Work/part2/models/stage1/run001/ppo_drone.zip
+HW2_Work/part2/logs/stage1/run001/monitor.csv
+HW2_Work/part2/logs/stage1/run001/training_curve.png
+HW2_Work/part2/logs/stage1/run001/training_curve.csv
 ```
+
+Training outputs are numbered by default, so the next run becomes `run002`
+instead of overwriting `run001`.
 
 ## Test
 
@@ -110,7 +113,8 @@ The test script prints:
 - average steps to target
 - safety filter activation count
 - side sonar near-miss count
-- per-episode CSV rows in `logs/eval_metrics.csv`
+- per-episode CSV rows in `logs/eval_metrics.csv`; if the file already exists,
+  the script writes `logs/eval_metrics_001.csv`, `logs/eval_metrics_002.csv`, etc.
 
 ## ROS Topics
 

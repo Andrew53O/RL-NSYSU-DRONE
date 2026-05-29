@@ -35,13 +35,13 @@ from drone_env import DroneSonarAvoidEnv
 
 # File layout:
 # - PART2_DIR is /workspace/HW2_Work/part2 inside Docker.
-# - models/ stores Stable-Baselines3 PPO .zip checkpoints.
-# - logs/ stores Monitor CSV files and training-curve PNGs for the report.
+# - models/stageN/runXXX/ stores Stable-Baselines3 PPO .zip checkpoints.
+# - logs/stageN/runXXX/ stores Monitor CSV files and training-curve PNGs.
 ROOT = Path(__file__).resolve().parents[1]
 PART2_DIR = Path(__file__).resolve().parent
 MODEL_DIR = PART2_DIR / "models"
 LOG_DIR = PART2_DIR / "logs"
-MODEL_PATH = MODEL_DIR / "ppo_drone.zip"
+MODEL_PATH = MODEL_DIR / "latest" / "ppo_drone.zip"
 
 
 # Curriculum stages are intentionally simple. They do not change the neural
@@ -272,15 +272,17 @@ def _sanitize_run_name(name: str) -> str:
 
 
 def _next_stage_run_name(stage: int, smoke: bool) -> str:
-    prefix = f"stage{stage}_{'smoke_' if smoke else ''}run"
+    stage_model_dir = MODEL_DIR / f"stage{stage}"
+    stage_log_dir = LOG_DIR / f"stage{stage}"
+    prefix = "smoke_run" if smoke else "run"
     index = 1
     while True:
         candidate = f"{prefix}{index:03d}"
         paths = [
-            MODEL_DIR / f"ppo_drone_{candidate}.zip",
-            LOG_DIR / f"{candidate}.monitor.csv",
-            LOG_DIR / f"training_curve_{candidate}.png",
-            LOG_DIR / f"training_curve_{candidate}.csv",
+            stage_model_dir / candidate / "ppo_drone.zip",
+            stage_log_dir / candidate / "monitor.csv",
+            stage_log_dir / candidate / "training_curve.png",
+            stage_log_dir / candidate / "training_curve.csv",
         ]
         if not any(path.exists() for path in paths):
             return candidate
@@ -288,7 +290,7 @@ def _next_stage_run_name(stage: int, smoke: bool) -> str:
 
 
 def _latest_stage_model(stage: int) -> Path | None:
-    candidates = list(MODEL_DIR.glob(f"ppo_drone_stage{stage}_run*.zip"))
+    candidates = list((MODEL_DIR / f"stage{stage}").glob("*/ppo_drone.zip"))
     legacy_path = MODEL_DIR / f"ppo_drone_stage{stage}.zip"
     if legacy_path.exists():
         candidates.append(legacy_path)
@@ -300,7 +302,7 @@ def _latest_stage_model(stage: int) -> Path | None:
 def resolve_resume_path(args: argparse.Namespace) -> Path | None:
     # Manual resume has priority. Use this when you want to keep training the
     # same stage after a 10k-timestep chunk:
-    # python3 train.py --stage 1 --resume-from models/ppo_drone_stage1.zip ...
+    # python3 train.py --stage 1 --resume-from models/stage1/run001/ppo_drone.zip ...
     if args.resume_from is not None:
         return args.resume_from
 
@@ -333,15 +335,17 @@ def main() -> None:
         if args.run_name
         else _next_stage_run_name(args.stage, args.smoke)
     )
-    model_path = MODEL_DIR / f"ppo_drone_{run_name}.zip"
-    monitor_path = LOG_DIR / f"{run_name}.monitor.csv"
-    curve_path = LOG_DIR / f"training_curve_{run_name}.png"
-    curve_csv_path = LOG_DIR / f"training_curve_{run_name}.csv"
+    run_model_dir = MODEL_DIR / f"stage{args.stage}" / run_name
+    run_log_dir = LOG_DIR / f"stage{args.stage}" / run_name
+    model_path = run_model_dir / "ppo_drone.zip"
+    monitor_path = run_log_dir / "monitor.csv"
+    curve_path = run_log_dir / "training_curve.png"
+    curve_csv_path = run_log_dir / "training_curve.csv"
 
     # These folders live in the mounted HW2_Work directory, so models/logs
     # remain visible on the host after training inside Docker.
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    run_model_dir.mkdir(parents=True, exist_ok=True)
+    run_log_dir.mkdir(parents=True, exist_ok=True)
     if not args.overwrite:
         existing_outputs = [
             path for path in (model_path, monitor_path, curve_path, curve_csv_path)
@@ -422,7 +426,10 @@ def main() -> None:
         # Save the learned neural-network policy. test.py loads this file later.
         model.save(model_path)
         if args.update_latest:
-            model.save(MODEL_DIR / f"ppo_drone_stage{args.stage}.zip")
+            latest_stage_dir = MODEL_DIR / f"stage{args.stage}" / "latest"
+            latest_stage_dir.mkdir(parents=True, exist_ok=True)
+            MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+            model.save(latest_stage_dir / "ppo_drone.zip")
             model.save(MODEL_PATH)
 
         # Convert monitor.csv into report PNG and readable CSV training curves.
@@ -430,7 +437,7 @@ def main() -> None:
         print(f"Run name: {run_name}")
         print(f"Saved stage model: {model_path}")
         if args.update_latest:
-            print(f"Updated stage latest model: {MODEL_DIR / f'ppo_drone_stage{args.stage}.zip'}")
+            print(f"Updated stage latest model: {latest_stage_dir / 'ppo_drone.zip'}")
             print(f"Updated default model copy: {MODEL_PATH}")
         if curve_saved:
             print(f"Saved training curve: {curve_path}")

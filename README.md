@@ -210,6 +210,11 @@ python3 train.py --stage 4 --timesteps 50000
 python3 test.py --episodes 5 --csv logs/eval_metrics.csv
 ```
 
+Training outputs are grouped by stage and run number, for example
+`models/stage1/run001/ppo_drone.zip` and
+`logs/stage1/run001/training_curve.csv`. Evaluation CSVs are also numbered
+automatically if the requested filename already exists.
+
 
 
 # Configure plugin

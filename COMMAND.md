@@ -239,12 +239,14 @@ python3 train.py --smoke --stage 1
 Expected outputs:
 
 ```text
-/workspace/HW2_Work/part2/models/ppo_drone.zip
-/workspace/HW2_Work/part2/models/ppo_drone_stage1.zip
-/workspace/HW2_Work/part2/logs/training_curve_stage1.png
+/workspace/HW2_Work/part2/models/stage1/smoke_run001/ppo_drone.zip
+/workspace/HW2_Work/part2/logs/stage1/smoke_run001/monitor.csv
+/workspace/HW2_Work/part2/logs/stage1/smoke_run001/training_curve.png
+/workspace/HW2_Work/part2/logs/stage1/smoke_run001/training_curve.csv
 ```
 
 A smoke run only proves the pipeline works. It does not prove good obstacle avoidance yet.
+Training runs are numbered by default, so later runs use `run002`, `run003`, etc.
 
 ## 9. Test The Current Model
 
@@ -317,7 +319,7 @@ ros2 topic echo --once /simple_drone/side_sonar_right/out
 Also save:
 
 ```text
-HW2_Work/part2/logs/training_curve_stage4.png
+HW2_Work/part2/logs/stage4/run001/training_curve.png
 HW2_Work/part2/logs/eval_metrics.csv
 ```
 
