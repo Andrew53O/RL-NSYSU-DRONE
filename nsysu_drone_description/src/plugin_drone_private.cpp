@@ -53,6 +53,9 @@ void DroneSimpleControllerPrivate::Reset()
   angular_velocity.Set();
   acceleration.Set();
   euler.Set();
+  cmd_vel = geometry_msgs::msg::Twist();
+  navi_state = LANDED_MODEL;
+  m_timeAfterCmd = 0.0;
 }
 
 // ROS Node configuration
