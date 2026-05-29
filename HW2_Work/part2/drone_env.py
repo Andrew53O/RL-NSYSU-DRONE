@@ -26,6 +26,7 @@ from gymnasium import spaces
 from rclpy.node import Node
 from sensor_msgs.msg import Range
 from std_msgs.msg import Empty
+from std_srvs.srv import Empty as EmptySrv
 
 try:
     from gazebo_msgs.srv import DeleteEntity, SpawnEntity
@@ -96,6 +97,7 @@ class DroneRosBridge(Node):
         self.target_marker_enabled = SpawnEntity is not None and DeleteEntity is not None
         self.target_marker_warning_logged = False
         self.target_marker_spawned = False
+        self.reset_world_warning_logged = False
 
         self.cmd_pub = self.create_publisher(Twist, f"{ns}/cmd_vel", 10)
         # Reset publishes /takeoff before PPO starts controlling each episode.
@@ -104,6 +106,7 @@ class DroneRosBridge(Node):
         if self.target_marker_enabled:
             self.spawn_entity_client = self.create_client(SpawnEntity, "/spawn_entity")
             self.delete_entity_client = self.create_client(DeleteEntity, "/delete_entity")
+        self.reset_world_client = self.create_client(EmptySrv, "/reset_world")
 
         self.create_subscription(Pose, f"{ns}/gt_pose", self._pose_cb, 10)
         self.create_subscription(Twist, f"{ns}/gt_vel", self._vel_cb, 10)
@@ -174,6 +177,22 @@ class DroneRosBridge(Node):
     def stop(self) -> None:
         self.publish_velocity(np.zeros(3, dtype=np.float32))
 
+    def reset_gazebo_world(self) -> None:
+        """Reset Gazebo model poses so each RL episode starts near the origin."""
+        if not self.reset_world_client.wait_for_service(timeout_sec=0.5):
+            if not self.reset_world_warning_logged:
+                self.get_logger().warning(
+                    "/reset_world is unavailable; episode reset will only reset controller state"
+                )
+                self.reset_world_warning_logged = True
+            return
+
+        future = self.reset_world_client.call_async(EmptySrv.Request())
+        rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+        if not future.done() and not self.reset_world_warning_logged:
+            self.get_logger().warning("/reset_world did not complete before timeout")
+            self.reset_world_warning_logged = True
+
     def update_target_marker(self, target: np.ndarray) -> None:
         """Show the current RL target in Gazebo as a small green sphere."""
         if not self.target_marker_enabled:
@@ -220,6 +239,7 @@ class DroneRosBridge(Node):
 
     def reset_and_takeoff(self, takeoff_altitude: float = 0.5, timeout_sec: float = 12.0) -> None:
         self.stop()
+        self.reset_gazebo_world()
         self.pose = None
         self.down_sonar_range = None
         for sector in self.front_sonar_ranges:
@@ -344,6 +364,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self._wait_for_initial_state(min_altitude=self.takeoff_altitude)
 
         obs = self._get_obs()
+        self._log_position_if_needed(force=True)
         self.previous_distance = float(self.last_observation_info["distance_to_target"])
         return obs, self._info(obs)
 
@@ -361,7 +382,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.step_count += 1
 
         obs = self._get_obs()
-        self._log_position_if_needed(force=True)
+        self._log_position_if_needed()
         info = self.last_observation_info
         current_distance = float(info["distance_to_target"])
         down_sonar_range = float(info["down_sonar_range"])
