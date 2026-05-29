@@ -141,7 +141,7 @@ def parse_args() -> argparse.Namespace:
     # A timestep is one call to env.step(action), not a full episode.
     # With max_steps=400 and step_dt=0.1 in DroneSonarAvoidEnv, one full timeout
     # episode is about 400 timesteps, or roughly 40 simulated seconds.
-    parser.add_argument("--timesteps", type=int, default=50_000)
+    parser.add_argument("--timesteps", type=int, default=500_000)
     parser.add_argument("--smoke", action="store_true", help="Run a short training smoke test.")
     # max_steps is the episode time limit. If rollout/ep_len_mean stays at 400,
     # the policy is usually timing out instead of reaching the target.
