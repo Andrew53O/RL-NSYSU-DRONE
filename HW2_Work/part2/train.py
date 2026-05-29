@@ -26,6 +26,7 @@ try:
     import gymnasium as gym
     import matplotlib.pyplot as plt
     from stable_baselines3 import PPO
+    from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback
     from stable_baselines3.common.monitor import Monitor
 except ImportError as exc:  # pragma: no cover - helpful runtime message
     raise SystemExit(
@@ -126,6 +127,93 @@ class CurriculumTargetWrapper(gym.Wrapper):
         return tuple(random.uniform(low, high) for low, high in bounds)
 
 
+class BestTrainingModelCallback(BaseCallback):
+    """Save the best policy seen during training, not only the final policy.
+
+    PPO can temporarily learn a good behavior and then drift worse later. This
+    callback watches finished Monitor episodes and saves two extra checkpoints:
+    - best_episode_model.zip: highest single episode reward
+    - best_average_model.zip: highest recent moving-average reward
+    """
+
+    def __init__(self, best_model_dir: Path, window: int = 20, verbose: int = 0) -> None:
+        super().__init__(verbose=verbose)
+        self.best_model_dir = best_model_dir
+        self.window = max(1, window)
+        self.episode_rewards: list[float] = []
+        self.best_episode_reward = float("-inf")
+        self.best_average_reward = float("-inf")
+        self.best_summary_path = best_model_dir / "best_summary.csv"
+
+    def _on_training_start(self) -> None:
+        self.best_model_dir.mkdir(parents=True, exist_ok=True)
+        with self.best_summary_path.open("w", newline="") as fp:
+            writer = csv.DictWriter(
+                fp,
+                fieldnames=[
+                    "episode",
+                    "timesteps",
+                    "reward",
+                    "recent_average_reward",
+                    "saved",
+                ],
+            )
+            writer.writeheader()
+
+    def _on_step(self) -> bool:
+        for info in self.locals.get("infos", []):
+            episode_info = info.get("episode")
+            if not episode_info:
+                continue
+
+            reward = float(episode_info["r"])
+            self.episode_rewards.append(reward)
+            recent_rewards = self.episode_rewards[-self.window :]
+            recent_average = sum(recent_rewards) / len(recent_rewards)
+            saved: list[str] = []
+
+            if reward > self.best_episode_reward:
+                self.best_episode_reward = reward
+                self.model.save(self.best_model_dir / "best_episode_model.zip")
+                saved.append("best_episode_model")
+
+            if recent_average > self.best_average_reward:
+                self.best_average_reward = recent_average
+                self.model.save(self.best_model_dir / "best_average_model.zip")
+                saved.append("best_average_model")
+
+            if saved:
+                with self.best_summary_path.open("a", newline="") as fp:
+                    writer = csv.DictWriter(
+                        fp,
+                        fieldnames=[
+                            "episode",
+                            "timesteps",
+                            "reward",
+                            "recent_average_reward",
+                            "saved",
+                        ],
+                    )
+                    writer.writerow(
+                        {
+                            "episode": len(self.episode_rewards),
+                            "timesteps": self.num_timesteps,
+                            "reward": reward,
+                            "recent_average_reward": recent_average,
+                            "saved": "+".join(saved),
+                        }
+                    )
+
+                if self.verbose:
+                    print(
+                        "Saved "
+                        f"{', '.join(saved)} at episode {len(self.episode_rewards)} "
+                        f"(reward={reward:.3f}, avg={recent_average:.3f})"
+                    )
+
+        return True
+
+
 def parse_args() -> argparse.Namespace:
     """Read command-line options for the training run.
 
@@ -179,6 +267,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-steps", type=int, default=512)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument(
+        "--checkpoint-freq",
+        type=int,
+        default=10_000,
+        help="Save a periodic PPO checkpoint every N timesteps. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--best-window",
+        type=int,
+        default=20,
+        help="Episode window used when saving best_average_model.zip.",
+    )
     parser.add_argument(
         "--run-name",
         type=str,
@@ -341,6 +441,8 @@ def main() -> None:
     run_model_dir = MODEL_DIR / f"stage{args.stage}" / run_name
     run_log_dir = LOG_DIR / f"stage{args.stage}" / run_name
     model_path = run_model_dir / "ppo_drone.zip"
+    best_model_dir = run_model_dir / "best"
+    checkpoint_dir = run_model_dir / "checkpoints"
     monitor_path = run_log_dir / "monitor.csv"
     curve_path = run_log_dir / "training_curve.png"
     curve_csv_path = run_log_dir / "training_curve.csv"
@@ -386,11 +488,28 @@ def main() -> None:
 
     try:
         resume_path = resolve_resume_path(args)
+        effective_n_steps = 256 if args.smoke else args.n_steps
         if resume_path is not None:
             if not resume_path.exists():
                 raise SystemExit(f"Resume checkpoint not found: {resume_path}")
-            model = PPO.load(resume_path, env=env, device="cpu")
+            # PPO checkpoints store their old optimizer settings. Passing these
+            # values into load() makes --learning-rate/--n-steps/--batch-size/
+            # --gamma actually apply when continuing a run.
+            model = PPO.load(
+                resume_path,
+                env=env,
+                device="cpu",
+                learning_rate=args.learning_rate,
+                n_steps=effective_n_steps,
+                batch_size=args.batch_size,
+                gamma=args.gamma,
+            )
             print(f"Resuming PPO from: {resume_path}")
+            print(
+                "Applied PPO settings after resume: "
+                f"learning_rate={args.learning_rate}, n_steps={effective_n_steps}, "
+                f"batch_size={args.batch_size}, gamma={args.gamma}"
+            )
         else:
             # PPO is the RL algorithm. "MlpPolicy" means a small neural network that
             # maps the observation vector to a continuous action [vx, vy, vz].
@@ -405,7 +524,7 @@ def main() -> None:
                 learning_rate=args.learning_rate,
                 # n_steps is how many environment steps PPO collects before one
                 # policy update. A smaller value makes smoke tests finish faster.
-                n_steps=256 if args.smoke else args.n_steps,
+                n_steps=effective_n_steps,
                 batch_size=args.batch_size,
                 # gamma controls how much future reward matters. 0.99 is common for
                 # navigation tasks because reaching the target may require many steps.
@@ -424,7 +543,25 @@ def main() -> None:
         # action = policy(obs)
         # obs, reward, terminated, truncated, info = env.step(action)
         # Then PPO updates the policy to increase expected future reward.
-        model.learn(total_timesteps=total_timesteps)
+        callbacks = [
+            BestTrainingModelCallback(
+                best_model_dir=best_model_dir,
+                window=args.best_window,
+                verbose=1,
+            )
+        ]
+        if args.checkpoint_freq > 0:
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            callbacks.append(
+                CheckpointCallback(
+                    save_freq=args.checkpoint_freq,
+                    save_path=str(checkpoint_dir),
+                    name_prefix="ppo_drone",
+                )
+            )
+        callback = CallbackList(callbacks)
+
+        model.learn(total_timesteps=total_timesteps, callback=callback)
 
         # Save the learned neural-network policy. test.py loads this file later.
         model.save(model_path)
@@ -439,6 +576,9 @@ def main() -> None:
         curve_saved = build_training_curve(monitor_path, curve_path, curve_csv_path)
         print(f"Run name: {run_name}")
         print(f"Saved stage model: {model_path}")
+        print(f"Saved best models under: {best_model_dir}")
+        if args.checkpoint_freq > 0:
+            print(f"Saved periodic checkpoints under: {checkpoint_dir}")
         if args.update_latest:
             print(f"Updated stage latest model: {latest_stage_dir / 'ppo_drone.zip'}")
             print(f"Updated default model copy: {MODEL_PATH}")

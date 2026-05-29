@@ -431,32 +431,45 @@ class DroneSonarAvoidEnv(gym.Env):
         y_pos = float(info["y"])
         z_pos = float(info["z"])
         reward_distance = current_distance if math.isfinite(current_distance) else self.distance_norm
+        target_error = self.target - np.array([x_pos, y_pos, z_pos], dtype=np.float32)
 
         progress_reward = 0.0
         if self.previous_distance is not None and math.isfinite(current_distance):
-            progress_scale = 14.0 if current_distance < 1.0 else 8.0
+            progress_scale = 18.0 if current_distance < 1.0 else 8.0
             progress_reward = progress_scale * (self.previous_distance - current_distance)
         self.previous_distance = current_distance
 
         direction_reward = 0.0
         if math.isfinite(current_distance) and current_distance > 1e-6:
-            target_direction = (self.target - np.array([x_pos, y_pos, z_pos])) / current_distance
+            target_direction = target_error / current_distance
             command_alignment = float(np.dot(filtered_action, target_direction))
-            direction_reward = 0.20 * float(np.clip(command_alignment, -1.0, 1.0))
+            direction_reward = 0.35 * float(np.clip(command_alignment, -1.0, 1.0))
 
         distance_penalty = 0.06 * reward_distance
+        near_target_bonus = 0.0
         near_target_precision_penalty = 0.0
         near_target_axis_penalty = 0.0
+        near_target_lateral_penalty = 0.0
         near_target_velocity_penalty = 0.0
         if math.isfinite(current_distance) and current_distance < 1.0:
-            target_error = self.target - np.array([x_pos, y_pos, z_pos], dtype=np.float32)
-            near_target_precision_penalty = 0.35 * current_distance
-            near_target_axis_penalty = 0.10 * (
-                abs(float(target_error[0]))
-                + abs(float(target_error[1]))
-                + 0.5 * abs(float(target_error[2]))
-            )
-            near_target_velocity_penalty = 0.05 * float(np.linalg.norm(self.ros.velocity))
+            x_error = abs(float(target_error[0]))
+            y_error = abs(float(target_error[1]))
+            z_error = abs(float(target_error[2]))
+            velocity_norm = float(np.linalg.norm(self.ros.velocity))
+
+            # The strict 0.4 m success radius needs dense feedback inside the
+            # last meter. Without this, PPO often hovers around 0.65-0.75 m and
+            # gets a timeout instead of learning the final correction.
+            near_target_bonus = 0.20 * (1.0 - current_distance)
+            if current_distance < 0.7:
+                near_target_bonus += 0.25 * (0.7 - current_distance)
+            if current_distance < 0.5:
+                near_target_bonus += 0.45 * (0.5 - current_distance)
+
+            near_target_precision_penalty = 0.30 * current_distance
+            near_target_axis_penalty = 0.18 * x_error + 0.16 * y_error + 0.08 * z_error
+            near_target_lateral_penalty = 0.12 * y_error
+            near_target_velocity_penalty = 0.08 * velocity_norm
         mean_risk_penalty = 2.0 * obstacle_mean_risk**2
         max_risk_penalty = 4.0 * obstacle_max_risk**2
         trend_penalty = 1.5 * max_approach_trend
@@ -468,9 +481,11 @@ class DroneSonarAvoidEnv(gym.Env):
         reward = (
             progress_reward
             + direction_reward
+            + near_target_bonus
             - distance_penalty
             - near_target_precision_penalty
             - near_target_axis_penalty
+            - near_target_lateral_penalty
             - near_target_velocity_penalty
             - mean_risk_penalty
             - max_risk_penalty
@@ -518,7 +533,8 @@ class DroneSonarAvoidEnv(gym.Env):
             terminated = True
             status = "unsafe_down_sonar"
         elif self.step_count >= self.max_steps:
-            reward -= 5.0
+            timeout_distance_penalty = 30.0 * min(reward_distance, 2.0)
+            reward -= 5.0 + timeout_distance_penalty
             truncated = True
             status = "timeout"
 
