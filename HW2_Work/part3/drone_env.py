@@ -414,7 +414,7 @@ class DroneCurriculumEnv(gym.Env):
         filtered_action, was_filtered = self._apply_safety_filter(action)
         self.last_action_was_filtered = was_filtered
         self.ros.publish_velocity(filtered_action)
-        rclpy.spin_once(self.ros, timeout_sec=self.step_dt)
+        self._spin_for_step()
         self.step_count += 1
 
         obs = self._get_obs()
@@ -551,6 +551,15 @@ class DroneCurriculumEnv(gym.Env):
             if min_altitude is not None and self.ros.pose[2] < min_altitude:
                 continue
             return
+
+    def _spin_for_step(self) -> None:
+        """Hold each action for the configured control period."""
+        deadline = time.monotonic() + self.step_dt
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                return
+            rclpy.spin_once(self.ros, timeout_sec=min(0.02, remaining))
 
     def _get_obs(self) -> np.ndarray:
         pose = self.ros.pose
