@@ -237,7 +237,7 @@ class DroneRosBridge(Node):
             self.get_logger().warning("Gazebo target marker spawn did not complete")
             self.target_marker_warning_logged = True
 
-    def reset_and_takeoff(self, takeoff_altitude: float = 0.5, timeout_sec: float = 12.0) -> None:
+    def reset_and_takeoff(self, takeoff_altitude: float = 0.5, timeout_sec: float = 12.0) -> bool:
         self.stop()
         self.reset_gazebo_world()
         self.pose = None
@@ -255,7 +255,7 @@ class DroneRosBridge(Node):
             rclpy.spin_once(self, timeout_sec=0.1)
             if self.pose is not None and self.pose[2] >= takeoff_altitude:
                 self.stop()
-                return
+                return True
 
         if self.pose is not None:
             self.get_logger().warning(
@@ -267,6 +267,7 @@ class DroneRosBridge(Node):
                 "Takeoff wait timed out before receiving pose at "
                 f"{takeoff_altitude:.2f} m"
             )
+        return False
 
 
 class DroneSonarAvoidEnv(gym.Env):
@@ -295,7 +296,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.step_dt = float(step_dt)
         self.log_position_every = max(0, int(log_position_every))
 
-        self.target_reached_distance = 0.4
+        self.target_reached_distance = 0.75
         self.min_altitude = 0.25
         self.max_altitude = 5.0
         self.xy_limit = 8.0
@@ -364,8 +365,14 @@ class DroneSonarAvoidEnv(gym.Env):
         self.recent_obstacle_min.clear()
         self.previous_obstacle_sonar = self._safe_obstacle_sonar_ranges()
 
-        self.ros.reset_and_takeoff(takeoff_altitude=self.takeoff_altitude)
-        self._wait_for_initial_state(min_altitude=self.takeoff_altitude)
+        for attempt in range(3):
+            takeoff_ok = self.ros.reset_and_takeoff(takeoff_altitude=self.takeoff_altitude)
+            self._wait_for_initial_state(min_altitude=self.takeoff_altitude)
+            if takeoff_ok and self.ros.pose is not None and self.ros.pose[2] >= self.min_altitude:
+                break
+            self.ros.get_logger().warning(
+                f"Retrying reset/takeoff after low start attempt {attempt + 1}/3"
+            )
 
         obs = self._get_obs()
         self._log_position_if_needed(force=True)
