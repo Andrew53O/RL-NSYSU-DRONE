@@ -56,21 +56,22 @@ MODEL_PATH = MODEL_DIR / "ppo_drone.zip"
 #   negative y is the other side.
 # - z: altitude above the ground in meters.
 #
-# Example: target=(2.5, 0.0, 1.5) means "fly to x=2.5 m, y=0 m,
-# altitude z=1.5 m." Stage 1 is fixed because PPO first needs to learn basic
-# target-directed velocity control before obstacle avoidance is meaningful.
+# Example: target=(1.0, 0.0, 0.8) means "fly to x=1.0 m, y=0 m,
+# altitude z=0.8 m." Stage 1 is deliberately very close to the takeoff
+# altitude because PPO first needs to learn basic target-directed velocity
+# control before obstacle avoidance or high-altitude navigation is meaningful.
 CURRICULUM_STAGES = {
     1: {
         "name": "stage1_fixed_easy",
-        "target": (2.5, 0.0, 1.5),
+        "target": (1.0, 0.0, 0.8),
         "random_target": False,
-        "description": "fixed start/reset and fixed easy target",
+        "description": "fixed start/reset and very close low-altitude target",
     },
     2: {
         "name": "stage2_random_open",
-        "target": (4.0, 2.0, 2.0),
+        "target": (2.5, 0.0, 1.2),
         "random_target": True,
-        "target_bounds": ((2.0, 5.5), (-4.5, 4.5), (1.3, 3.0)),
+        "target_bounds": ((1.0, 3.0), (-1.5, 1.5), (0.8, 1.6)),
         "description": "randomized target in open space away from walls",
     },
     3: {
@@ -141,7 +142,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--smoke", action="store_true", help="Run a short training smoke test.")
     # max_steps is the episode time limit. If rollout/ep_len_mean stays at 400,
     # the policy is usually timing out instead of reaching the target.
-    parser.add_argument("--max-steps", type=int, default=400)
+    parser.add_argument("--max-steps", type=int, default=800)
     parser.add_argument("--stage", type=int, choices=sorted(CURRICULUM_STAGES), default=1)
     parser.add_argument(
         "--target",
