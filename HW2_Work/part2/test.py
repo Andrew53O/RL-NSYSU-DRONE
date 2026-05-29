@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from pathlib import Path
 from statistics import mean
+
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 try:
     from stable_baselines3 import PPO

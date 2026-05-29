@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import random
 from pathlib import Path
+
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 try:
     import gymnasium as gym

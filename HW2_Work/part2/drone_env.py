@@ -102,6 +102,7 @@ class DroneRosBridge(Node):
         self.cmd_pub = self.create_publisher(Twist, f"{ns}/cmd_vel", 10)
         # Reset publishes /takeoff before PPO starts controlling each episode.
         self.takeoff_pub = self.create_publisher(Empty, f"{ns}/takeoff", 10)
+        self.land_pub = self.create_publisher(Empty, f"{ns}/land", 10)
         self.reset_pub = self.create_publisher(Empty, f"{ns}/reset", 10)
         if self.target_marker_enabled:
             self.spawn_entity_client = self.create_client(SpawnEntity, "/spawn_entity")
@@ -246,8 +247,22 @@ class DroneRosBridge(Node):
             self.front_sonar_ranges[sector] = None
         for sector in self.side_sonar_ranges:
             self.side_sonar_ranges[sector] = None
-        self.reset_pub.publish(Empty())
-        rclpy.spin_once(self, timeout_sec=0.5)
+        for _ in range(3):
+            self.reset_pub.publish(Empty())
+            rclpy.spin_once(self, timeout_sec=0.2)
+
+        # Some already-launched Gazebo sessions may still be using an older
+        # reset plugin that leaves the navigation state as FLYING. In that
+        # state, /takeoff is ignored, so force a brief landing phase before
+        # requesting takeoff again. With the fixed plugin this is harmless.
+        land_deadline = time.monotonic() + 1.3
+        while time.monotonic() < land_deadline:
+            self.land_pub.publish(Empty())
+            rclpy.spin_once(self, timeout_sec=0.1)
+
+        for _ in range(3):
+            self.reset_pub.publish(Empty())
+            rclpy.spin_once(self, timeout_sec=0.2)
 
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
@@ -366,6 +381,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.recent_obstacle_min.clear()
         self.previous_obstacle_sonar = self._safe_obstacle_sonar_ranges()
 
+        takeoff_ok = False
         for attempt in range(3):
             takeoff_ok = self.ros.reset_and_takeoff(takeoff_altitude=self.takeoff_altitude)
             self._wait_for_initial_state(min_altitude=self.takeoff_altitude)
@@ -373,6 +389,12 @@ class DroneSonarAvoidEnv(gym.Env):
                 break
             self.ros.get_logger().warning(
                 f"Retrying reset/takeoff after low start attempt {attempt + 1}/3"
+            )
+        if not takeoff_ok or self.ros.pose is None or self.ros.pose[2] < self.min_altitude:
+            raise RuntimeError(
+                "Drone reset/takeoff failed after 3 attempts. Restart Gazebo and, "
+                "if this persists, rebuild nsysu_drone_description so the reset "
+                "plugin restores LANDED state."
             )
 
         obs = self._get_obs()
