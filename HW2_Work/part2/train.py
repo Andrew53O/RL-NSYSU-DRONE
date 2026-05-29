@@ -193,8 +193,9 @@ class BestTrainingModelCallback(BaseCallback):
                 self.model.save(self.best_model_dir / "best_average_model.zip")
                 saved.append("best_average_model")
 
-            # Reward is useful but imperfect: a near-target timeout can score
-            # well while still failing the strict 0.4 m Stage-1 criterion. This
+            # Reward is useful but imperfect: a loose near-target success can
+            # score well while still failing the strict 0.1 m Stage-1 precision
+            # criterion. This
             # checkpoint prioritizes actual episode status == "success".
             has_recent_success = sum(recent_successes) > 0
             better_success_rate = recent_success_rate > self.best_success_rate
@@ -269,8 +270,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--success-distance",
         type=float,
-        default=0.4,
-        help="Distance in meters that counts as reaching the target.",
+        default=0.1,
+        help=(
+            "Distance in meters that counts as reaching the target. "
+            "Stage 1 precision training defaults to 0.1; use 0.4 only as a "
+            "loose sanity check."
+        ),
     )
     parser.add_argument("--stage", type=int, choices=sorted(CURRICULUM_STAGES), default=1)
     parser.add_argument(

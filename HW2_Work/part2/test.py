@@ -35,8 +35,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--success-distance",
         type=float,
-        default=0.4,
-        help="Distance in meters that counts as reaching the target.",
+        default=0.1,
+        help=(
+            "Distance in meters that counts as reaching the target. "
+            "Use 0.1 for strict Stage 1 precision and 0.4 only as a loose "
+            "sanity check."
+        ),
     )
     parser.add_argument("--target", nargs=3, type=float, default=(1.0, 0.0, 0.8))
     parser.add_argument("--episodes", type=int, default=1)

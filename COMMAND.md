@@ -286,7 +286,9 @@ Run this after smoke training works:
 
 ```bash
 cd /workspace/HW2_Work/part2
-python3 train.py --stage 1 --timesteps 50000
+python3 train.py --stage 1 --success-distance 0.1 --timesteps 70000
+python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.1 --episodes 10
+python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.4 --episodes 10
 python3 train.py --stage 2 --timesteps 50000
 python3 train.py --stage 3 --timesteps 50000
 python3 train.py --stage 4 --timesteps 50000

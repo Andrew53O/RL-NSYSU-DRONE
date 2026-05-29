@@ -203,7 +203,9 @@ ros2 topic echo --once /simple_drone/side_sonar_right/out
 cd /workspace/HW2_Work/part2
 python3 -m py_compile drone_env.py train.py test.py
 python3 train.py --smoke --stage 1
-python3 train.py --stage 1 --timesteps 50000
+python3 train.py --stage 1 --success-distance 0.1 --timesteps 70000
+python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.1 --episodes 10
+python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.4 --episodes 10  # loose sanity check
 python3 train.py --stage 2 --timesteps 50000
 python3 train.py --stage 3 --timesteps 50000
 python3 train.py --stage 4 --timesteps 50000

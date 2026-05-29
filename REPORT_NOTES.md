@@ -30,9 +30,9 @@ During training, PPO does not always improve monotonically. A policy can reach a
 
 `best_average_model.zip` is the checkpoint with the highest recent moving-average episode return. This is usually better for evaluation and curriculum transfer because it favors stable behavior over a one-time lucky rollout.
 
-`best_success_model.zip` is the checkpoint with the highest recent strict success rate, where success is the environment terminal status rather than only high reward. This is the most relevant Stage-1 checkpoint because the strict target criterion is `distance < 0.4 m`; a near-target timeout can still have a good reward curve but should not be treated as a solved stage.
+`best_success_model.zip` is the checkpoint with the highest recent strict success rate, where success is the environment terminal status rather than only high reward. This is the most relevant Stage-1 checkpoint because the strict target criterion is `distance < 0.1 m`; a loose near-target success can still have a good reward curve but should not be treated as precise target control.
 
-For Stage 1, the strict success radius is `0.4 m`. The evaluation logs showed that early policies often reached the target region but timed out around `0.6 m`, first because they hovered too high and later because they stopped short in the forward x direction. The reward was therefore adjusted in small steps to improve altitude precision and forward target precision while keeping the same observation and action spaces.
+For Stage 1, `0.4 m` is treated as a loose sanity metric, while `0.1 m` is used for strict precision training and evaluation. The evaluation logs showed that early policies trained with the looser threshold learned to stop near the edge of the success sphere instead of flying to the target center. Training with `0.1 m` forced PPO to continue improving forward and altitude precision. This means `success_distance` is part of the MDP design, not only a reporting/evaluation choice.
 
 Literature alignment:
 
