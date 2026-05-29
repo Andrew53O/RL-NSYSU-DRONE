@@ -35,7 +35,7 @@ SIDE_NEAR_MISS_DISTANCE = 0.5
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Test PPO for NSYSU Drone Task D.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL_PATH)
-    parser.add_argument("--max-steps", type=int, default=800)
+    parser.add_argument("--max-steps", type=int, default=1500)
     parser.add_argument(
         "--success-distance",
         type=float,

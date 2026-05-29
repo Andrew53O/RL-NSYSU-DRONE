@@ -232,6 +232,12 @@ was short in `x` and high in `z`, so the reward now penalizes high-altitude
 drift more strongly and evaluation logs average commanded velocity plus final
 velocity for diagnosis.
 
+Run017 showed another Stage 1 issue: the policy commanded maximum forward
+velocity for the whole episode, so farther targets needed more control steps.
+Training and evaluation therefore default to `max_steps=1500`, while the reward
+adds near-target braking and x-overshoot penalties so longer episodes do not
+encourage flying past the target.
+
 Each run also saves:
 
 ```text

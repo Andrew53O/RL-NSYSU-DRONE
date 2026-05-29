@@ -340,6 +340,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.step_count = 0
         self.previous_distance: float | None = None
         self.previous_abs_target_error: np.ndarray | None = None
+        self.previous_target_error: np.ndarray | None = None
         self.previous_obstacle_sonar = np.full(
             OBSTACLE_SONAR_COUNT,
             self.max_sonar_range,
@@ -385,6 +386,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self.last_status = "running"
         self.previous_action = np.zeros(3, dtype=np.float32)
         self.previous_abs_target_error = None
+        self.previous_target_error = None
         self.last_action_was_filtered = False
         self.recent_obstacle_min.clear()
         self.previous_obstacle_sonar = self._safe_obstacle_sonar_ranges()
@@ -409,6 +411,7 @@ class DroneSonarAvoidEnv(gym.Env):
         self._log_position_if_needed(force=True)
         self.previous_distance = float(self.last_observation_info["distance_to_target"])
         self.previous_abs_target_error = self._current_abs_target_error()
+        self.previous_target_error = self._current_target_error()
         return obs, self._info(obs)
 
     def step(
@@ -449,6 +452,17 @@ class DroneSonarAvoidEnv(gym.Env):
             dtype=np.float32,
         )
         above_target = max(0.0, z_pos - float(self.target[2]))
+        crossed_x_target = False
+        if self.previous_target_error is not None:
+            previous_dx = float(self.previous_target_error[0])
+            current_dx = float(target_error[0])
+            crossed_x_target = (
+                math.isfinite(previous_dx)
+                and math.isfinite(current_dx)
+                and abs(previous_dx) > 0.03
+                and abs(current_dx) > 0.03
+                and previous_dx * current_dx < 0.0
+            )
 
         progress_reward = 0.0
         if self.previous_distance is not None and math.isfinite(current_distance):
@@ -518,6 +532,8 @@ class DroneSonarAvoidEnv(gym.Env):
         near_target_altitude_band_penalty = 0.0
         near_target_lateral_penalty = 0.0
         near_target_velocity_penalty = 0.0
+        near_target_forward_action_penalty = 0.0
+        x_overshoot_penalty = 0.0
         if math.isfinite(current_distance) and current_distance < 1.0:
             velocity_norm = float(np.linalg.norm(self.ros.velocity))
 
@@ -537,7 +553,15 @@ class DroneSonarAvoidEnv(gym.Env):
             if current_distance < 0.5:
                 near_target_altitude_band_penalty = 2.0 * max(0.0, z_error - 0.08)
             near_target_lateral_penalty = 0.20 * y_error
-            near_target_velocity_penalty = 0.08 * velocity_norm
+            near_target_velocity_penalty = 0.12 * velocity_norm
+            if x_error < 0.35:
+                near_target_forward_action_penalty = 0.18 * abs(float(filtered_action[0]))
+            if x_error < 0.20:
+                near_target_forward_action_penalty += 0.20 * abs(float(filtered_action[0]))
+            if crossed_x_target:
+                x_overshoot_penalty = 1.0
+            elif float(target_error[0]) < -0.05:
+                x_overshoot_penalty = 0.60 * min(abs(float(target_error[0])), 1.0)
         mean_risk_penalty = 2.0 * obstacle_mean_risk**2
         max_risk_penalty = 4.0 * obstacle_max_risk**2
         trend_penalty = 1.5 * max_approach_trend
@@ -565,6 +589,8 @@ class DroneSonarAvoidEnv(gym.Env):
             - near_target_altitude_band_penalty
             - near_target_lateral_penalty
             - near_target_velocity_penalty
+            - near_target_forward_action_penalty
+            - x_overshoot_penalty
             - mean_risk_penalty
             - max_risk_penalty
             - trend_penalty
@@ -574,6 +600,7 @@ class DroneSonarAvoidEnv(gym.Env):
             - filter_penalty
         )
         self.previous_action = filtered_action.copy()
+        self.previous_target_error = target_error.copy()
 
         terminated = False
         truncated = False
@@ -633,6 +660,12 @@ class DroneSonarAvoidEnv(gym.Env):
         if pose is None:
             return None
         return np.abs(self.target - pose).astype(np.float32)
+
+    def _current_target_error(self) -> np.ndarray | None:
+        pose = self.ros.pose
+        if pose is None:
+            return None
+        return (self.target - pose).astype(np.float32)
 
     def _wait_for_initial_state(
         self,
