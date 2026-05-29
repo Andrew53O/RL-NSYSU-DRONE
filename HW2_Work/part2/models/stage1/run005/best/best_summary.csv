@@ -1,0 +1,5 @@
+episode,timesteps,reward,recent_average_reward,saved
+1,514,211.018683,211.018683,best_episode_model+best_average_model
+3,1710,252.599349,46.434688,best_episode_model
+7,4267,260.405246,0.8578931428571366,best_episode_model
+15,8944,268.463279,35.731203799999996,best_episode_model
