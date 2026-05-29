@@ -244,6 +244,17 @@ training_curve.png
 `run_config.json` records the target, success distance, PPO hyperparameters,
 resume checkpoint, output paths, and observation normalization constants.
 
+Evaluation writes a matching config next to each CSV:
+
+```text
+logs/eval/stageN/runXXX/eval001.csv
+logs/eval/stageN/runXXX/eval001_config.json
+```
+
+The eval config records the model path, target, success distance, episode
+count, max steps, and metrics so strict and loose evaluation runs are easy to
+compare later.
+
 ## Training Notes
 
 Current Stage 1 command:

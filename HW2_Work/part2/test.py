@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
 
@@ -127,6 +129,50 @@ def default_eval_csv_path(
     if run_name_override is not None:
         run_name = run_name_override
     return _next_numbered_eval_path(LOG_DIR / "eval" / stage_name / run_name)
+
+
+def eval_config_path(csv_path: Path) -> Path:
+    return csv_path.with_name(f"{csv_path.stem}_config.json")
+
+
+def write_eval_config(path: Path, args: argparse.Namespace, csv_path: Path) -> None:
+    stage_name, run_name = _infer_stage_and_run(args.model)
+    if args.stage is not None:
+        stage_name = f"stage{args.stage}"
+    if args.run_name is not None:
+        run_name = args.run_name
+
+    config = {
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "model": str(args.model),
+        "csv": str(csv_path),
+        "stage": stage_name,
+        "run_name": run_name,
+        "target": list(args.target),
+        "success_distance": args.success_distance,
+        "episodes": args.episodes,
+        "max_steps": args.max_steps,
+        "log_position_every": args.log_position_every,
+        "overwrite": args.overwrite,
+        "metrics": [
+            "success_rate",
+            "crash_rate",
+            "timeout_rate",
+            "average_return",
+            "average_distance_to_target",
+            "average_cmd_vx",
+            "average_cmd_vy",
+            "average_cmd_vz",
+            "average_minimum_obstacle_sonar_distance",
+            "average_steps_to_target",
+            "safety_filter_activation_count",
+            "side_sonar_near_miss_count",
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as fp:
+        json.dump(config, fp, indent=2, sort_keys=True)
+        fp.write("\n")
 
 
 def run_episode(env: DroneSonarAvoidEnv, model: PPO, max_steps: int) -> dict[str, float | int | str]:
@@ -296,8 +342,11 @@ def main() -> None:
         env.close()
 
     write_eval_csv(csv_path, rows)
+    config_path = eval_config_path(csv_path)
+    write_eval_config(config_path, args, csv_path)
     print_summary(rows)
     print(f"saved_eval_csv: {csv_path}")
+    print(f"saved_eval_config: {config_path}")
 
 
 if __name__ == "__main__":
