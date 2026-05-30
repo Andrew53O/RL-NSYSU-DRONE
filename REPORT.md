@@ -177,6 +177,40 @@ Stage 1 isolates vertical control so the policy learns how `vz_cmd` affects alti
 
 This curriculum is also useful for debugging. If Stage 4 fails, the earlier stages show whether the problem is basic flight control or obstacle reaction. In this project, Stages 1-3 worked reliably, so Stage 4 failures could be interpreted as sonar-avoidance failures rather than basic navigation failures.
 
+### Gazebo Obstacle Worlds
+
+For the obstacle-avoidance stages, I created separate Gazebo world files so that the evaluation environment is reproducible.
+
+For **Stage 4**, the world file is:
+
+```text
+nsysu_drone_description/worlds/stage4_obstacle.world
+```
+
+This world places the main task obstacle between the drone start position and the final target. The designed Stage 4 cone is:
+
+```text
+Construction Cone -> (5.0, 0.0, 0.05)
+```
+
+The final target is `(10.0, 0.0, 1.0)`, so this cone is directly on the nominal straight path. This makes Stage 4 a clear one-obstacle sonar-avoidance task: the drone should fly toward the target, detect the cone with sonar near `x=5`, avoid it, and continue toward the final goal. The base Gazebo map also contains other background cones, but the obstacle intentionally used for the Stage 4 task is the cone at `(5.0, 0.0, 0.05)`.
+
+For **Stage 5**, the world file is:
+
+```text
+nsysu_drone_description/worlds/stage5_obstacle.world
+```
+
+This world extends Stage 4 by placing three task-relevant cones along the route to the same final target `(10.0, 0.0, 1.0)`:
+
+```text
+Construction_Cone   -> (5.0,  0.0, 0.05)
+Construction_Cone_0 -> (6.5, -0.5, 0.05)
+Construction_Cone_1 -> (8.0,  0.0, 0.05)
+```
+
+The first and third cones are close to the direct line from the start to the target, while the second cone is offset to make the path less trivial. This Stage 5 setup is intended to test whether the sonar policy can handle multiple obstacle encounters rather than only memorizing one avoidance maneuver.
+
 ## Results and Discussion
 
 The following table summarizes the deterministic evaluation logs available in `HW2_Work/part3/logs/eval`.
@@ -195,11 +229,11 @@ Stage 4 is the most important Task D result. In 8 of 10 episodes, the policy rea
 
 The Stage 4 result is report-worthy because it demonstrates the intended behavior: long-distance target navigation with sonar risk influencing the path. However, the unsafe episodes are an important limitation. The policy sometimes reacts too late near the obstacle. A future improvement would train longer on randomized obstacle offsets, increase the penalty for high sonar risk, or use a slightly larger unsafe threshold so the policy learns earlier avoidance.
 
-Stage 5 was prepared as a multiple-obstacle extension. The final Stage 5 world places cones around:
+Stage 5 was prepared as a multiple-obstacle extension. The final Stage 5 world places task cones around:
 
 ```text
 Construction_Cone   -> (5.0,  0.0, 0.05)
-Construction_Cone_0 -> (6.5, -1.6, 0.05)
+Construction_Cone_0 -> (6.5, -0.5, 0.05)
 Construction_Cone_1 -> (8.0,  0.0, 0.05)
 ```
 
