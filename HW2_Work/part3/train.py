@@ -281,7 +281,12 @@ def next_run_name(model_root: Path, log_root: Path, smoke: bool) -> str:
         index += 1
 
 
-def build_training_curve(monitor_path: Path, png_path: Path, csv_path: Path) -> bool:
+def build_training_curve(
+    monitor_path: Path,
+    png_path: Path,
+    csv_path: Path,
+    title: str = "Part 3 PPO Training Curve",
+) -> bool:
     rewards: list[float] = []
     if not monitor_path.exists():
         return False
@@ -321,7 +326,7 @@ def build_training_curve(monitor_path: Path, png_path: Path, csv_path: Path) -> 
         plt.plot(range(1, len(averages) + 1), averages, label=f"{window}-episode avg")
     plt.xlabel("Episode")
     plt.ylabel("Reward")
-    plt.title("Part 3 PPO Training Curve")
+    plt.title(title)
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
@@ -464,7 +469,8 @@ def main() -> None:
             )
         model.learn(total_timesteps=total_timesteps, callback=CallbackList(callbacks))
         model.save(model_path)
-        if build_training_curve(monitor_path, curve_png, curve_csv):
+        curve_title = f"Part 3 PPO Training Curve - Stage {args.stage} Variant {variant} {run_name}"
+        if build_training_curve(monitor_path, curve_png, curve_csv, title=curve_title):
             print(f"Saved training curve: {curve_png}")
             print(f"Saved training curve CSV: {curve_csv}")
         print(f"Saved model: {model_path}")
