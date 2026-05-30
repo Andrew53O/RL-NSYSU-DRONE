@@ -2,9 +2,13 @@
 
 ## Task Definition and Motivation
 
-This project addresses **Task D: Autonomous Obstacle Avoidance** in the NSYSU Drone ROS 2 and Gazebo Classic simulator. The final goal is to train a drone policy that can navigate toward a target while reacting to sonar-based obstacle information. Because the deadline is short, the project intentionally uses sonar instead of camera input. A camera-based policy would require image preprocessing, a larger neural network, and more simulation time. Sonar gives a compact local-obstacle signal that is easier to train with PPO.
+This project addresses **Task D: Autonomous Obstacle Avoidance** in the NSYSU Drone ROS 2 and Gazebo Classic simulator. The final goal is to train a drone policy that can navigate toward a target while reacting to sonar-based obstacle information. However, obstacle avoidance cannot be learned well if the drone does not first understand target navigation. For this reason, the project also trains the skills from **Task B: Random Target Navigation** before adding obstacles. The curriculum first teaches the drone how to move toward different target positions, then activates sonar-based obstacle avoidance.
 
-The final implementation is in `HW2_Work/part3`. It uses a clean curriculum instead of the earlier, more complex Part 2 experiments. The curriculum first teaches basic motion skills, then introduces sequential targets, then activates sonar for obstacle avoidance:
+This task is useful because target navigation and obstacle avoidance are basic abilities for autonomous drones. DJI-style camera drones, such as the DJI Mini series, can follow a person, record videos, and avoid obstacles without full manual control. Similar behaviors are useful for filming, outdoor recording, inspection, and search tasks. A drone should not only fly to a point; it should also decide when to slow down, move sideways, or change altitude to stay safe.
+
+Because the deadline is short, the project intentionally uses sonar instead of camera input. A camera-based policy would require image preprocessing, a larger neural network, and more simulation time. Sonar gives a compact local-obstacle signal that is easier to train with PPO. The task is suitable for reinforcement learning because the agent can learn navigation and safety decisions from simulation instead of relying only on fixed hand-written rules.
+
+The final implementation is in `HW2_Work/part3`. It uses a clean curriculum instead of the earlier, more complex Part 2 experiments:
 
 | Stage | Skill | Sonar Used | Main Goal |
 | --- | --- | --- | --- |
