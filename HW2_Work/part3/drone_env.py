@@ -45,7 +45,6 @@ OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part3_rl_target_marker"
 STAGE4_FINAL_GOAL = np.array([10.0, 0.0, 1.0], dtype=np.float32)
 STAGE4_LOCAL_GOAL_STEP = 1.0
-STAGE4_MARKER_UPDATE_STEPS = 25
 TARGET_MARKER_COLORS = (
     (0.0, 1.0, 0.1, 1.0),  # first target: green
     (0.0, 0.25, 1.0, 1.0),  # second target: blue
@@ -578,8 +577,6 @@ class DroneCurriculumEnv(gym.Env):
 
         if status in {"success", "timeout"}:
             self._log_position(force=True)
-        elif self.stage == 4 and self.step_count % STAGE4_MARKER_UPDATE_STEPS == 0:
-            self._update_stage_markers(force=True)
         if terminated or truncated:
             self.ros.stop()
         return obs, float(reward), terminated, truncated, self._info(status)
@@ -612,9 +609,7 @@ class DroneCurriculumEnv(gym.Env):
         if not force:
             return
         if self.stage == 4:
-            self.ros.update_target_markers(
-                np.array([self._stage4_local_target(), self.mission_goal], dtype=np.float32)
-            )
+            self.ros.update_target_marker(self.mission_goal)
         else:
             self.ros.update_target_markers(self.targets)
 
