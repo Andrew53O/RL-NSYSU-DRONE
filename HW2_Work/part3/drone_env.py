@@ -497,7 +497,7 @@ class DroneCurriculumEnv(gym.Env):
             truncated = True
             status = "timeout"
 
-        if status == "timeout":
+        if status in {"success", "timeout"}:
             self._log_position(force=True)
         if terminated or truncated:
             self.ros.stop()
