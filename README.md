@@ -95,7 +95,13 @@ An XFCE desktop will appear — all GUI windows (Gazebo, RViz, xterm) will spawn
 
 ### 5. Start the simulation
 
-- Inside the container's shell (the one you launched with `run_docker.sh`):
+- Enter a shell inside the running container. If you are already in the shell that printed the TurboVNC message, you can use that directly. Otherwise, open a new host terminal and run:
+
+```bash
+docker exec -it nsysu_drone_vnc bash
+```
+
+- Inside the container shell, start Gazebo and RViz:
 
 ```bash
 launch_drone
