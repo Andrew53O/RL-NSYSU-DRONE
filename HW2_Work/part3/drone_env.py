@@ -151,10 +151,8 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
     ),
     (5, "A"): StageSpec(
         name="stage5_multi_obstacle",
-        description="multi-obstacle sonar avoidance",
-        fixed_targets=((3.0, 0.8, 1.0),),
-        x_bounds=(1.5, 3.5),
-        z_bounds=(0.8, 1.6),
+        description="long-goal multi-obstacle sonar avoidance",
+        fixed_targets=((10.0, 0.0, 1.0),),
         sonar_enabled=True,
         focus="obstacle",
     ),
