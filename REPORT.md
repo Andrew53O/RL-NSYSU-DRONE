@@ -336,11 +336,7 @@ vz = Kp * (target_z - current_z)
 
 and then clamps the velocity magnitude to `max_speed = 1.0`. This is a useful baseline because it represents a conventional hand-written controller that can fly directly to a target in open space.
 
-The baseline comparison has not been fully measured yet, so the next step is to run it using the same Stage 4 world and record its behavior. The expected weakness is clear: `fly_straight.py` does not read sonar, so in the obstacle world it should fly directly toward the target and either collide with the cone or pass dangerously close depending on the exact obstacle placement.
-
-Step-by-step baseline evaluation:
-
-1. Edit `nsysu_drone_control/fly_straight.py` so the baseline target matches Stage 4:
+For the baseline test, I edited `fly_straight.py` so the target matched the Stage 4 mission:
 
 ```python
 self.target_x = 10.0
@@ -349,14 +345,14 @@ self.target_z = 1.0
 self.tolerance = 0.25
 ```
 
-2. Start Gazebo with the Stage 4 obstacle world:
+I then started Gazebo with the Stage 4 obstacle world:
 
 ```bash
 vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
   world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
 ```
 
-3. In a second terminal, run the baseline controller:
+and ran the baseline controller in another terminal:
 
 ```bash
 python3 /ros2_ws/src/nsysu_drone_control/fly_straight.py
@@ -364,16 +360,16 @@ python3 /ros2_ws/src/nsysu_drone_control/fly_straight.py
 
 If the package has been rebuilt and sourced, the same controller can also be started with `ros2 run nsysu_drone_control fly_straight`.
 
-4. Record whether it reaches the target, collides, or passes too close to the cone. Useful measurements are final distance to `(10, 0, 1)`, minimum sonar range, and whether the drone crashes or needs manual interruption.
+The result was a failure: the P controller flew straight toward `(10, 0, 1)` and crashed into the obstacle path. This is expected because `fly_straight.py` only tracks position error. It does not read sonar, does not know an obstacle is in front of the drone, and has no rule for moving sideways or changing altitude when the cone blocks the direct path.
 
-5. Compare the baseline against PPO Stage 4:
+The comparison is:
 
 | Controller | Uses Sonar | Stage 4 Success Rate | Unsafe/Crash Rate | Expected Behavior |
 | --- | --- | ---: | ---: | --- |
-| P controller baseline | No | To be measured | To be measured | Flies straight toward target; cannot intentionally avoid the cone |
+| P controller baseline | No | 0% | 100% | Flies straight toward target and crashes into the obstacle path |
 | PPO Stage 4 policy | Yes | 80% | 20% | Usually bends around the obstacle and reaches near `(10, 0, 1)` |
 
-This comparison is fair because both controllers command `/simple_drone/cmd_vel`, but only the PPO policy receives sonar-risk features. The PPO policy requires more training effort, but it can combine forward progress and obstacle reaction in one controller. The P controller is simpler and easier to explain, but it has no mechanism for autonomous obstacle avoidance unless extra hand-crafted sonar rules are added.
+This comparison is fair because both controllers command `/simple_drone/cmd_vel`, but only the PPO policy receives sonar-risk features. The P controller is simpler and easier to explain, but it has no mechanism for autonomous obstacle avoidance unless extra hand-crafted sonar rules are added. The PPO policy requires training effort, but it can combine forward progress and obstacle reaction in one controller. This is why RL is more suitable than a pure P/PID-style controller for this sonar obstacle-avoidance task.
 
 ## Limitations
 
