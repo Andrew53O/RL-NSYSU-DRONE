@@ -58,53 +58,124 @@ Overall, these papers support the final MDP design. The observation combines goa
 
 ## Proposed Solution
 
-### Algorithm
+### Overview
 
-The policy is trained with **Proximal Policy Optimization (PPO)** from Stable-Baselines3 using `MlpPolicy`. PPO was selected because it is robust, widely used for continuous-control simulation tasks, and easier to tune under deadline pressure than more fragile off-policy alternatives. The implementation uses CPU training inside the provided ROS 2/Gazebo Docker workflow.
+The proposed solution is a curriculum-based PPO controller for the ROS 2/Gazebo drone. PPO is used as the high-level policy, while the simulator's internal drone plugin still handles low-level physical stabilization. The learned policy publishes velocity commands to `/simple_drone/cmd_vel`. This makes the RL task focused on navigation decisions: move forward/backward, move laterally, climb/descend, slow down near the target, and avoid sonar-detected obstacles.
 
-### MDP Formulation
+The implementation uses **Stable-Baselines3 PPO with `MlpPolicy`**. PPO was selected because it is stable for continuous-control simulation tasks and is easier to tune under the homework deadline than more sensitive off-policy algorithms. The same policy interface is kept across all stages so checkpoints can transfer from simple tasks into harder tasks.
 
-The state contains normalized drone pose, velocity, relative target information, target progress, sonar features, and a sonar-enabled flag. Sonar slots are always present, but they are masked to safe values before Stage 4. This keeps the observation shape fixed, allowing one curriculum checkpoint to continue into the next stage.
+### Observation Space Design
 
-The action is a continuous velocity command:
+The observation space is fixed at **41 values** for all stages. Keeping the size fixed is important because PPO checkpoints cannot be resumed cleanly if the observation shape changes between stages.
+
+The observation is:
+
+| Group | Count | Meaning |
+| --- | ---: | --- |
+| Normalized pose | 3 | `x`, `y`, `z` |
+| Velocity | 3 | `vx`, `vy`, normalized `vz` |
+| Relative target | 3 | `dx`, `dy`, `dz` from drone to active target |
+| Distance | 1 | Euclidean distance to active target |
+| Target progress | 1 | target index progress, or x-progress for long obstacle stages |
+| Total target count | 1 | normalized number of targets |
+| Sonar ranges | 7 | front-left, front-center, front-right, front-up, front-down, side-left, side-right |
+| Sonar risks | 7 | clipped risk values derived from sonar distance |
+| Previous sonar ranges | 7 | one-step memory of sonar readings |
+| Sonar trends | 7 | whether each sonar reading is getting closer or farther |
+| Sonar enabled flag | 1 | `0` before obstacle stages, `1` from Stage 4 onward |
+
+Total:
 
 ```text
-[vx_cmd, vy_cmd, vz_cmd]
-vx, vy in [-1.0, 1.0]
-vz in [-0.5, 0.5]
+3 + 3 + 3 + 1 + 1 + 1 + 7 + 7 + 7 + 7 + 1 = 41
 ```
 
-The reward combines dense progress shaping, axis-specific shaping, stability penalties, action penalties, success bonuses, and terminal penalties. From Stage 4 onward it also includes sonar risk penalties and unsafe-sonar termination. The discount factor is set through the PPO configuration, typically `gamma = 0.99`.
-
-### Observation Space
-
-The Part 3 observation is a fixed 41-dimensional vector:
+For Stages 1-3, sonar is intentionally masked:
 
 ```text
-pose: x, y, z
-velocity: vx, vy, vz
-relative target: dx, dy, dz
-distance to active target
-target progress / index information
-sonar ranges for 7 obstacle-facing sectors
-sonar risk values
-previous sonar ranges
-sonar trends
-sonar_enabled flag
+sonar ranges = safe maximum values
+sonar risks = 0
+previous sonar ranges = safe maximum values
+sonar trends = 0
+sonar_enabled = 0
 ```
 
-For Stages 1-3, sonar ranges are set to safe maximum values, sonar risks and trends are zero, and `sonar_enabled = 0`. For Stages 4-5, sonar is active and `sonar_enabled = 1`.
+This prevents the early navigation policy from depending on obstacle sensors before obstacles are introduced. From Stage 4 onward, the same observation slots contain real sonar data and `sonar_enabled = 1`. This design lets the policy learn basic motion first, then reuse the same neural network interface for obstacle avoidance.
 
-### Reward Design
+The relative target terms `dx`, `dy`, `dz`, and distance are central to the design. Earlier experiments showed that reward curves could look good while the drone still stopped short of the target or drifted in altitude. Giving the policy explicit normalized target error makes the target direction easier to learn.
 
-The reward has four main groups:
+### Action Space Design
 
-- **Target progress:** reward for reducing distance to the active target or mission goal.
-- **Axis progress:** reward for reducing `abs(dx)`, `abs(dy)`, and `abs(dz)`.
-- **Stability/control:** penalties for unnecessary lateral drift, high speed near target, large actions, and action changes.
-- **Safety:** penalties for sonar risk, near misses, safety-filter overrides, crashes, out-of-bounds states, invalid sensor states, and timeouts.
+The action space is a continuous 3D velocity command:
 
-Stage 4 uses a far mission goal at `(10, 0, 1)` and a dynamic local target about 1 meter ahead in `x`. The local target improves long-distance progress, but success is measured against the final mission goal. The Gazebo marker shows only the mission target so the visual target remains clear.
+```text
+action = [vx_cmd, vy_cmd, vz_cmd]
+```
+
+Bounds:
+
+```text
+vx_cmd in [-1.0, 1.0]
+vy_cmd in [-1.0, 1.0]
+vz_cmd in [-0.5, 0.5]
+```
+
+`vx_cmd` controls forward/backward movement, `vy_cmd` controls lateral motion, and `vz_cmd` controls altitude. The vertical command range is smaller because altitude control is more sensitive, and large vertical commands caused overshoot in early experiments.
+
+A continuous action space was chosen instead of discrete actions such as "forward," "left," or "hover" because the drone needs smooth motion. Continuous velocity commands allow the policy to slow down near the target, make small lateral corrections, and climb or descend gradually when sonar risk changes.
+
+### Reward Function Design
+
+The reward function is dense because sparse "success only" reward made early learning unstable. The reward combines navigation progress, precision, smoothness, and safety.
+
+The main reward components are:
+
+| Reward Term | Purpose |
+| --- | --- |
+| Distance progress reward | Reward the drone when distance to the active target decreases |
+| Mission-goal progress reward | In obstacle stages, reward progress toward the final goal `(10, 0, 1)` |
+| Axis-progress reward | Reward reductions in `abs(dx)`, `abs(dy)`, and `abs(dz)` |
+| Distance penalty | Discourage remaining far from the target |
+| Precision penalty | Penalize target-axis error depending on the stage focus |
+| Near-target braking penalty | Penalize high velocity and large action when close to target |
+| Action magnitude penalty | Encourage efficient, smooth commands |
+| Action-change penalty | Discourage jerky command changes |
+| Sonar risk penalty | Penalize mean and maximum obstacle risk from Stage 4 onward |
+| Safety-filter penalty | Penalize relying on the emergency safety filter |
+| Success bonus | Reward finishing the current target or full sequence |
+| Terminal penalties | Penalize crash, out-of-bounds, invalid sensor state, timeout, or unsafe sonar |
+
+The axis-progress weights change by stage. In the vertical stage, `dz` progress is weighted most strongly. In the horizontal stage, `dx` progress is weighted most strongly. In combined navigation, all axes matter, with extra emphasis on reaching the target while controlling lateral drift and altitude.
+
+Obstacle stages add sonar-specific reward terms. The environment converts sonar distance into a risk value, where a closer obstacle gives larger risk. The reward penalizes both mean obstacle risk and maximum obstacle risk. If the sonar range becomes dangerously small, the episode terminates as `unsafe_sonar` with a large penalty. This encourages the policy to avoid collision rather than simply rushing toward the goal.
+
+Stage 4 and Stage 5 use a far mission goal:
+
+```text
+(10.0, 0.0, 1.0)
+```
+
+To avoid making the far goal too sparse, the environment uses an internal dynamic local subgoal about `1 m` ahead in `x`. This helps the drone continue forward progress over a long route. However, it is not a hand-coded obstacle path. The local subgoal stays on the nominal route, while sonar risk determines whether the drone should move sideways or adjust altitude around obstacles. Success and reporting are measured using the final mission goal, not the internal local subgoal.
+
+### Six-Stage Learning Curriculum
+
+The six-stage curriculum was designed because training the full obstacle task from scratch was too difficult. Each stage teaches one part of the final behavior.
+
+| Stage | Variant | Goal | Target Setup | Sonar |
+| --- | --- | --- | --- | --- |
+| 1 | A | Learn basic altitude control | Fixed target `(0, 0, 1.2)` | Masked |
+| 1 | B | Generalize altitude control | Random `z` in `[0.7, 1.8]` | Masked |
+| 2 | A | Learn horizontal x movement | Fixed target `(1, 0, 0.8)` | Masked |
+| 2 | B | Generalize forward/back movement | Random `x` in `[-1, 2]` | Masked |
+| 3 | A | Combine x and z navigation | Random x/z target | Masked |
+| 3 | B | Visit multiple targets in order | Three random x/z targets A, B, C | Masked |
+| 4 | A | Avoid one obstacle with sonar | Final goal `(10, 0, 1)` with one cone near x=5 | Active |
+| 5 | A | Avoid multiple obstacles with sonar | Final goal `(10, 0, 1)` with several cones | Active |
+| 6 | A | Full mission behavior | Sequential targets with active sonar | Active |
+
+Stage 1 isolates vertical control so the policy learns how `vz_cmd` affects altitude. Stage 2 isolates horizontal `x` control while keeping altitude stable. Stage 3 combines the two skills and adds target sequencing. Stage 4 activates sonar and introduces the first obstacle. Stage 5 increases obstacle complexity. Stage 6 is the planned full mission stage, combining sequential target navigation with active sonar obstacle avoidance.
+
+This curriculum is also useful for debugging. If Stage 4 fails, the earlier stages show whether the problem is basic flight control or obstacle reaction. In this project, Stages 1-3 worked reliably, so Stage 4 failures could be interpreted as sonar-avoidance failures rather than basic navigation failures.
 
 ## Training Procedure
 
