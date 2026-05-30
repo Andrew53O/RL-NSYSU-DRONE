@@ -65,6 +65,13 @@ On the remote host:
 ./run_docker.sh
 ```
 
+Keep this terminal open. The container is started with `--rm`, so if this
+terminal exits, the container is removed and `docker exec` will fail with:
+
+```text
+No such container: nsysu_drone_vnc
+```
+
 Environment variables control GPU selection and port mapping:
 
 ```bash
@@ -94,6 +101,15 @@ On your local machine, open TurboVNC Viewer (or any VNC client) and connect to:
 An XFCE desktop will appear — all GUI windows (Gazebo, RViz, xterm) will spawn inside it.
 
 ### 5. Start the simulation
+
+- First make sure the container is running:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}"
+```
+
+You should see `nsysu_drone_vnc`. If not, go back to step 3 and run
+`./run_docker.sh`.
 
 - Enter a shell inside the running container. If you are already in the shell that printed the TurboVNC message, you can use that directly. Otherwise, open a new host terminal and run:
 
