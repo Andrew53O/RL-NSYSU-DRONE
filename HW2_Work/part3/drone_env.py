@@ -43,23 +43,45 @@ SONAR_SECTORS = (
 SONAR_COUNT = len(SONAR_SECTORS)
 OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part3_rl_target_marker"
-TARGET_MARKER_SDF = """
+TARGET_MARKER_COLORS = (
+    (0.0, 1.0, 0.1, 1.0),  # first target: green
+    (0.0, 0.25, 1.0, 1.0),  # second target: blue
+    (1.0, 0.0, 0.0, 1.0),  # third target: red
+    (1.0, 0.85, 0.0, 1.0),
+)
+TARGET_MARKER_EMISSIVE_SCALE = 0.7
+TARGET_MARKER_SDF_TEMPLATE = """
 <sdf version="1.6">
-  <model name="part3_rl_target_marker">
+  <model name="{name}">
     <static>true</static>
     <link name="target_link">
       <visual name="target_visual">
         <geometry><sphere><radius>0.18</radius></sphere></geometry>
         <material>
-          <ambient>0.0 1.0 0.1 1.0</ambient>
-          <diffuse>0.0 1.0 0.1 1.0</diffuse>
-          <emissive>0.0 0.7 0.05 1.0</emissive>
+          <ambient>{ambient}</ambient>
+          <diffuse>{diffuse}</diffuse>
+          <emissive>{emissive}</emissive>
         </material>
       </visual>
     </link>
   </model>
 </sdf>
 """
+
+
+def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> str:
+    emissive = (
+        color[0] * TARGET_MARKER_EMISSIVE_SCALE,
+        color[1] * TARGET_MARKER_EMISSIVE_SCALE,
+        color[2] * TARGET_MARKER_EMISSIVE_SCALE,
+        color[3],
+    )
+    return TARGET_MARKER_SDF_TEMPLATE.format(
+        name=name,
+        ambient=" ".join(f"{value:.3f}" for value in color),
+        diffuse=" ".join(f"{value:.3f}" for value in color),
+        emissive=" ".join(f"{value:.3f}" for value in emissive),
+    )
 
 
 @dataclass(frozen=True)
@@ -182,6 +204,7 @@ class DroneRosBridge(Node):
         self.sonar_max_range = 10.0
         self.target_marker_enabled = SpawnEntity is not None and DeleteEntity is not None
         self.target_marker_spawned = False
+        self.target_marker_names: set[str] = set()
         self.target_marker_warning_logged = False
         self.reset_world_warning_logged = False
 
@@ -283,27 +306,59 @@ class DroneRosBridge(Node):
                 return True
         return False
 
-    def update_target_marker(self, target: np.ndarray) -> None:
+    def _target_marker_name(self, index: int, target_count: int) -> str:
+        if target_count == 1:
+            return TARGET_MARKER_NAME
+        return f"{TARGET_MARKER_NAME}_{index + 1}"
+
+    def _delete_target_marker(self, name: str) -> None:
+        if not self.target_marker_enabled:
+            return
+        if not self.delete_entity_client.wait_for_service(timeout_sec=0.2):
+            return
+        req = DeleteEntity.Request()
+        req.name = name
+        future = self.delete_entity_client.call_async(req)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=0.5)
+
+    def clear_target_markers(self) -> None:
+        if not self.target_marker_enabled:
+            return
+        names = set(self.target_marker_names)
+        names.add(TARGET_MARKER_NAME)
+        for index in range(4):
+            names.add(self._target_marker_name(index, 4))
+        for name in sorted(names):
+            self._delete_target_marker(name)
+        self.target_marker_names.clear()
+        self.target_marker_spawned = False
+
+    def update_target_markers(self, targets: np.ndarray) -> None:
         if not self.target_marker_enabled:
             return
         if not self.spawn_entity_client.wait_for_service(timeout_sec=0.2):
             return
-        if self.target_marker_spawned and self.delete_entity_client.wait_for_service(timeout_sec=0.2):
-            req = DeleteEntity.Request()
-            req.name = TARGET_MARKER_NAME
-            future = self.delete_entity_client.call_async(req)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=0.5)
-        req = SpawnEntity.Request()
-        req.name = TARGET_MARKER_NAME
-        req.xml = TARGET_MARKER_SDF
-        req.reference_frame = "world"
-        req.initial_pose.position.x = float(target[0])
-        req.initial_pose.position.y = float(target[1])
-        req.initial_pose.position.z = float(target[2])
-        req.initial_pose.orientation.w = 1.0
-        future = self.spawn_entity_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=0.8)
-        self.target_marker_spawned = future.done() and future.result() is not None
+        self.clear_target_markers()
+        target_count = len(targets)
+        for index, target in enumerate(targets):
+            marker_name = self._target_marker_name(index, target_count)
+            color = TARGET_MARKER_COLORS[index % len(TARGET_MARKER_COLORS)]
+            req = SpawnEntity.Request()
+            req.name = marker_name
+            req.xml = target_marker_sdf(marker_name, color)
+            req.reference_frame = "world"
+            req.initial_pose.position.x = float(target[0])
+            req.initial_pose.position.y = float(target[1])
+            req.initial_pose.position.z = float(target[2])
+            req.initial_pose.orientation.w = 1.0
+            future = self.spawn_entity_client.call_async(req)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=0.8)
+            if future.done() and future.result() is not None:
+                self.target_marker_names.add(marker_name)
+        self.target_marker_spawned = bool(self.target_marker_names)
+
+    def update_target_marker(self, target: np.ndarray) -> None:
+        self.update_target_markers(np.array([target], dtype=np.float32))
 
 
 class DroneCurriculumEnv(gym.Env):
@@ -390,7 +445,7 @@ class DroneCurriculumEnv(gym.Env):
         self.previous_action = np.zeros(3, dtype=np.float32)
         self.previous_sonar = np.full(SONAR_COUNT, self.max_sonar_range, dtype=np.float32)
         self.last_action_was_filtered = False
-        self.ros.update_target_marker(self.current_target)
+        self.ros.update_target_markers(self.targets)
 
         takeoff_ok = False
         for attempt in range(3):
@@ -490,7 +545,6 @@ class DroneCurriculumEnv(gym.Env):
                 self.target_index += 1
                 self.previous_distance = None
                 self.previous_abs_error = None
-                self.ros.update_target_marker(self.current_target)
                 status = "target_reached"
         elif self.step_count >= self.max_steps:
             reward -= 5.0 + 20.0 * min(distance, 2.0)
