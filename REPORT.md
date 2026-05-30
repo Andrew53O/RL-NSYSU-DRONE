@@ -260,35 +260,106 @@ The first and third cones are close to the direct line from the start to the tar
 
 ## Results and Discussion
 
-The following table summarizes the deterministic evaluation logs available in `HW2_Work/part3/logs/eval`.
+The results were read from the saved training curves and deterministic evaluation CSV files in `HW2_Work/part3/logs`. The most important result for the assignment is Stage 4, because it is the first stage that activates sonar and requires the drone to pass an obstacle while flying toward the far mission target `(10, 0, 1)`.
 
-| Stage | Episodes | Success Rate | Unsafe Rate | Avg Final Distance | Avg Steps | Notes |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 1A | 5 | 100% | 0% | 0.015 | 14.0 | Fixed altitude target solved |
-| 1B | 10 | 100% | 0% | 0.109 | 20.2 | Random altitude solved |
-| 2A | 10 | 100% | 0% | 0.097 | 53.1 | Fixed x target solved |
-| 2B | 10 | 100% | 0% | 0.082 | 26.6 | Random x target solved |
-| 3A | 10 | 100% | 0% | 0.104 | 40.8 | Random x-z target solved |
-| 3B | 10 | 90% | 0% | 0.155 | 279.8 | Sequential target navigation mostly solved |
-| 4 | 10 | 80% | 20% | 0.424 overall | 210.0 | Sonar obstacle avoidance mostly successful |
+### Training Curves
 
-Stage 4 is the most important Task D result. In 8 of 10 episodes, the policy reached near `(10, 0, 1)` after passing the obstacle region. Successful Stage 4 episodes ended with mission-goal distance around `0.22-0.25 m`, final `x` around `9.79-9.84`, and final `z` around `0.92-0.93`. Two episodes ended with `unsafe_sonar` near the obstacle at `x≈5`, with minimum obstacle sonar range around `0.23-0.24 m`. This shows that the policy learned obstacle avoidance but is not perfectly robust.
+Each training curve is saved as `training_curve.csv`, with columns for episode reward and moving-average reward. The following table reports the best and final moving-average reward from the available runs. These values are not directly comparable across all stages because the reward scale changes when sequential targets and sonar penalties are introduced.
 
-The Stage 4 result is report-worthy because it demonstrates the intended behavior: long-distance target navigation with sonar risk influencing the path. However, the unsafe episodes are an important limitation. The policy sometimes reacts too late near the obstacle. A future improvement would train longer on randomized obstacle offsets, increase the penalty for high sonar risk, or use a slightly larger unsafe threshold so the policy learns earlier avoidance.
+| Stage | Training Curve File | Episodes Logged | Best Moving Avg Reward | Best Episode | Final Moving Avg Reward | Interpretation |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| 1A | `HW2_Work/part3/logs/stage1/variantA/run002/training_curve.csv` | 123 | 63.56 | 1 | 14.55 | Fixed altitude was learned quickly; precision model was better than judging only by final reward |
+| 1B | `HW2_Work/part3/logs/stage1/variantB/run001/training_curve.csv` | 170 | 75.22 | 152 | 17.87 | Random altitude improved strongly after early poor episodes |
+| 2A | `HW2_Work/part3/logs/stage2/variantA/run001/training_curve.csv` | 352 | 88.94 | 308 | 86.89 | Fixed horizontal target converged cleanly |
+| 2B | `HW2_Work/part3/logs/stage2/variantB/run001/training_curve.csv` | 1144 | 88.24 | 924 | 87.18 | Random x-target training stayed consistently high after convergence |
+| 3A | `HW2_Work/part3/logs/stage3/variantA/run002/training_curve.csv` | 218 | 90.35 | 140 | 89.39 | Combined x-z target was already close to solved from transferred skills |
+| 3B | `HW2_Work/part3/logs/stage3/variantB/run002/training_curve.csv` | 217 | 313.96 | 132 | 281.18 | Sequential target reward became high because multiple target bonuses were collected |
+| 4 | `HW2_Work/part3/logs/stage4/run004/training_curve.csv` | 287 | 15.52 | 208 | -70.76 | Sonar penalties made training noisier; best checkpoint was more useful than final checkpoint |
+| 5 | `HW2_Work/part3/logs/stage5/run006/training_curve.csv` | 162 | -416.55 | 125 | -429.62 | Multi-obstacle training remained negative and did not solve the task |
 
-Stage 5 was prepared as a multiple-obstacle extension. The final Stage 5 world places task cones around:
+The curves show why deterministic evaluation is necessary. For example, Stage 4's final moving average is negative because unsafe sonar penalties are large, but the best precision checkpoint still reaches the target in most evaluation episodes. Stage 5 remains negative and the evaluation confirms that it has not learned a safe multi-obstacle behavior yet.
 
-```text
-Construction_Cone   -> (5.0,  0.0, 0.05)
-Construction_Cone_0 -> (6.5, -0.5, 0.05)
-Construction_Cone_1 -> (8.0,  0.0, 0.05)
-```
+### Test-Time Evaluation
 
-Stage 5 uses the same final target `(10, 0, 1)`. At the time of this report, Stage 5 is an extension experiment rather than the main evaluated result.
+The deterministic test results are summarized below. For Stages 1-3, final distance is the distance to the active target. For Stage 4 and Stage 5, mission-goal distance is the distance to the final goal `(10, 0, 1)`.
+
+| Stage | Eval File | Episodes | Success Rate | Timeout Rate | Crash/Unsafe Rate | Avg Final or Mission Distance | Avg Steps | Main Finding |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1A | `HW2_Work/part3/logs/eval/stage1/variantA/run002/eval005.csv` | 5 | 100% | 0% | 0% | 0.036 | 24.0 | Fixed altitude control solved |
+| 1B | `HW2_Work/part3/logs/eval/stage1/variantB/run001/eval001.csv` | 10 | 100% | 0% | 0% | 0.109 | 20.2 | Random altitude control solved |
+| 2A | `HW2_Work/part3/logs/eval/stage2/variantA/run001/eval001.csv` | 10 | 100% | 0% | 0% | 0.097 | 53.1 | Fixed horizontal movement solved |
+| 2B | `HW2_Work/part3/logs/eval/stage2/variantB/run001/eval001.csv` | 10 | 100% | 0% | 0% | 0.082 | 26.6 | Random forward/backward movement solved |
+| 3A | `HW2_Work/part3/logs/eval/stage3/variantA/run001/eval001.csv` | 10 | 100% | 0% | 0% | 0.104 | 40.8 | Combined x-z single target solved |
+| 3B | `HW2_Work/part3/logs/eval/stage3/variantB/run001/eval001.csv` | 10 | 90% | 10% | 0% | 0.155 | 279.8 | Sequential navigation mostly solved |
+| 4 | `HW2_Work/part3/logs/eval/stage4/variantA/run004/eval001.csv` | 10 | 80% | 0% | 20% | 1.198 overall | 210.0 | One-obstacle sonar avoidance mostly successful |
+| 5 | `HW2_Work/part3/logs/eval/stage5/variantA/run006/eval001.csv` | 10 | 0% | 0% | 100% | 3.664 | 145.0 | Multi-obstacle task failed with unsafe sonar |
+
+Stage 1 through Stage 3 show that the curriculum successfully taught the drone basic motion before obstacle avoidance. The drone learned altitude control, horizontal movement, combined x-z navigation, and sequential targets. This matters because later failures in Stage 4 or Stage 5 are not basic flight failures; they are obstacle-avoidance failures.
+
+Stage 4 is the strongest result for Task D. In 8 of 10 episodes, the policy reached near the final mission goal after passing the obstacle. For the successful Stage 4 episodes only, the average final mission distance was `0.239 m`, average final position was approximately `(9.81, -0.12, 0.93)`, and average steps were `232.1`. This is close to the success threshold of `0.25 m`, showing that the dynamic subgoal and sonar-risk reward allowed the policy to fly the long route while still reacting to the obstacle.
+
+Stage 5 was intentionally included even though it is not solved. The Stage 5 policy had `success_rate = 0.000`, `timeout_rate = 0.000`, and `crash_or_unsafe_rate = 1.000`. The drone typically reached around `x=6.45`, `y=-0.91`, `z=0.93` before unsafe sonar termination, with average mission distance `3.664 m` and average minimum sonar range `0.121 m`. This indicates that the policy can move past the first obstacle area but does not yet handle the tighter multi-obstacle layout safely.
+
+### Failure Case Analysis
+
+| Stage | Failure Pattern | Evidence from Logs | Likely Cause | Next Fix |
+| --- | --- | --- | --- | --- |
+| 3B | One timeout after reaching part of the sequence | Episode 3 timed out at 800 steps with final distance `0.374` | Sequential target task sometimes leaves the drone with low progress command near the final target | Train longer with more random sequences or increase final-target precision reward |
+| 4 | Unsafe sonar near the first obstacle | Failed Stage 4 episodes stopped near `x≈5.0`, mission distance about `5.0 m`, minimum sonar about `0.238 m` | The policy sometimes moves forward too aggressively and reacts slightly too late to the cone | Increase sonar-risk penalty, randomize obstacle offset, or start avoidance penalty at a larger sonar distance |
+| 5 | Unsafe sonar in multi-obstacle region | All Stage 5 episodes ended as `unsafe_sonar`; average final `x=6.45`, `y=-0.91`, minimum sonar `0.121 m` | The Stage 4 policy overfits to one avoidance maneuver and cannot recover from several cones | Continue curriculum with easier two-obstacle layouts, wider cone spacing, or obstacle randomization |
+
+The most important failure insight is that Stage 5 does not fail because the drone cannot fly to `x=10`; Stage 4 already proves it can. Stage 5 fails because the local sonar-avoidance behavior is not general enough. This is exactly the limitation expected when moving from one cone to multiple cones without enough additional curriculum.
 
 ## Comparison With Classical Baseline
 
-The classical `fly_straight.py` style controller moves toward a target using a hand-written position-to-velocity rule. It is simple and predictable in open space, but it does not learn from obstacle encounters and does not automatically trade off target progress against sonar risk. The PPO policy is slower to develop because it requires training, but the final Stage 4 policy combines target progress and sonar avoidance in one learned controller. This is the main advantage of the RL approach for Task D.
+The repository includes a simple proportional controller in `nsysu_drone_control/fly_straight.py`. It computes velocity from position error:
+
+```text
+vx = Kp * (target_x - current_x)
+vy = Kp * (target_y - current_y)
+vz = Kp * (target_z - current_z)
+```
+
+and then clamps the velocity magnitude to `max_speed = 1.0`. This is a useful baseline because it represents a conventional hand-written controller that can fly directly to a target in open space.
+
+The baseline comparison has not been fully measured yet, so the next step is to run it using the same Stage 4 world and record its behavior. The expected weakness is clear: `fly_straight.py` does not read sonar, so in the obstacle world it should fly directly toward the target and either collide with the cone or pass dangerously close depending on the exact obstacle placement.
+
+Step-by-step baseline evaluation:
+
+1. Edit `nsysu_drone_control/fly_straight.py` so the baseline target matches Stage 4:
+
+```python
+self.target_x = 10.0
+self.target_y = 0.0
+self.target_z = 1.0
+self.tolerance = 0.25
+```
+
+2. Start Gazebo with the Stage 4 obstacle world:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
+```
+
+3. In a second terminal, run the baseline controller:
+
+```bash
+python3 /ros2_ws/src/nsysu_drone_control/fly_straight.py
+```
+
+If the package has been rebuilt and sourced, the same controller can also be started with `ros2 run nsysu_drone_control fly_straight`.
+
+4. Record whether it reaches the target, collides, or passes too close to the cone. Useful measurements are final distance to `(10, 0, 1)`, minimum sonar range, and whether the drone crashes or needs manual interruption.
+
+5. Compare the baseline against PPO Stage 4:
+
+| Controller | Uses Sonar | Stage 4 Success Rate | Unsafe/Crash Rate | Expected Behavior |
+| --- | --- | ---: | ---: | --- |
+| P controller baseline | No | To be measured | To be measured | Flies straight toward target; cannot intentionally avoid the cone |
+| PPO Stage 4 policy | Yes | 80% | 20% | Usually bends around the obstacle and reaches near `(10, 0, 1)` |
+
+This comparison is fair because both controllers command `/simple_drone/cmd_vel`, but only the PPO policy receives sonar-risk features. The PPO policy requires more training effort, but it can combine forward progress and obstacle reaction in one controller. The P controller is simpler and easier to explain, but it has no mechanism for autonomous obstacle avoidance unless extra hand-crafted sonar rules are added.
 
 ## Limitations
 
