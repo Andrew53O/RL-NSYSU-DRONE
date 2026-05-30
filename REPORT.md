@@ -42,21 +42,19 @@ This does not mean RL is automatically better than classical control. The Stage 
 
 ## Literature Review
 
-Recent UAV reinforcement learning work supports the design choices used here: PPO or actor-critic continuous control, curriculum learning, goal-relative observations, subgoals for long routes, and sensor-based obstacle evaluation.
+Recent UAV reinforcement learning research supports the main design decisions in this project: PPO for stable continuous control, goal-relative observations, curriculum learning, subgoal decomposition, and explicit obstacle-risk features. The following five papers are all from the past five years and are directly connected to the observation space, action space, and reward function used in `HW2_Work/part3`.
 
-Kabas used PPO for autonomous UAV navigation in simulation. The important lesson for this project is that PPO can serve as a practical high-level UAV controller when the problem is formulated as an MDP and the reward gives dense navigation feedback. This influenced the choice of Stable-Baselines3 PPO and continuous velocity commands.
+**Kabas, 2022 - PPO for autonomous UAV navigation.** Kabas [1] trained a UAV navigation policy with Proximal Policy Optimization (PPO). The method formulates UAV navigation as an RL problem and uses simulation to train a policy that maps environment observations to control actions. The experiments evaluate whether PPO can guide a UAV through autonomous navigation scenarios rather than relying on a manually tuned controller. This paper inspired the use of Stable-Baselines3 PPO with `MlpPolicy` in this project. It also supports the decision to use continuous velocity commands `[vx_cmd, vy_cmd, vz_cmd]` and dense reward shaping instead of sparse success-only rewards.
 
-Zhang, Li, and Dong studied TD3-based UAV navigation in multi-obstacle environments. Their work emphasizes that obstacle avoidance requires meaningful environmental state, not only a target coordinate. This influenced the Stage 4 and Stage 5 sonar design: obstacle sectors are converted into normalized ranges, risk values, previous values, and trends.
+**Zhang, Li, and Dong, 2022 - TD3 for UAV navigation in multi-obstacle environments.** Zhang et al. [2] proposed a deep reinforcement learning approach based on Twin Delayed Deep Deterministic Policy Gradient (TD3) for UAV navigation with multiple obstacles. Their method uses actor-critic continuous control and environmental observations so the UAV can avoid obstacles while progressing toward a target. The experiments compare navigation performance in random and dynamic multi-obstacle environments. This work influenced the Stage 4 and Stage 5 sonar design. Instead of giving the policy only a target coordinate, the observation includes obstacle-facing sonar ranges, risk values, previous ranges, and range trends, so the policy can react to local obstacle structure.
 
-Joshi et al. studied PPO-based UAV obstacle avoidance under measurement uncertainty. This influenced the evaluation method. The project does not trust reward curves alone; `test.py` logs mission goal distance, minimum sonar range, unsafe sonar terminations, safety-filter overrides, and command statistics.
+**Joshi et al., 2023 - PPO obstacle avoidance under measurement uncertainty.** Joshi et al. [3] studied sim-to-real UAV waypoint navigation and obstacle avoidance using PPO under measurement uncertainty. Their experiments analyze how noisy measurements affect DRL navigation and obstacle-avoidance performance, including transfer from simulation to a real UAV. This paper influenced two parts of the project. First, the observation does not use raw sonar alone; it also includes processed risk and trend features to make short-term obstacle changes easier to learn. Second, evaluation is separated from training reward. The `test.py` script records success status, mission-goal distance, minimum sonar range, unsafe-sonar terminations, safety-filter overrides, and command statistics because a high training reward alone does not prove safe navigation.
 
-Subgoal-based UAV path planning research shows that long missions can be decomposed into smaller goal-reaching tasks. This inspired Stage 3B sequential targets and the Stage 4 internal local subgoal. The Stage 4 local subgoal is not a fixed avoidance trajectory; it only encourages steady forward progress toward the far goal while sonar determines local avoidance.
+**Lee, Kim, and Jang, 2023 - goal-conditioned subgoal path planning.** Lee et al. [4] proposed real-time UAV path planning using goal-conditioned reinforcement learning and user-defined subgoals. Their method trains a UAV agent to reach various goals and then uses subgoals to perform more complex maneuvers in unknown environments. Their experiments include tasks such as high-flying, low-flying, penetrating, and bypassing, showing that subgoals can make a single trained policy more flexible. This paper inspired Stage 3B and the Stage 4 long-distance design. Stage 3B uses three sequential targets, while Stage 4 uses an internal local subgoal about one meter ahead in `x` to help the drone make steady progress toward the far mission goal `(10, 0, 1)`. Importantly, the subgoal is not a hand-authored obstacle path; sonar risk still determines avoidance.
 
-Kim et al. used curriculum learning and goal-conditioned reinforcement learning for UAV control. This directly supports the Part 3 structure: vertical control, horizontal control, combined navigation, sequential targets, then obstacle avoidance. The same observation and action shape is preserved across stages so PPO checkpoints can continue training.
+**Kim et al., 2025 - curriculum learning and goal-conditioned UAV control.** Kim et al. [5] combined curriculum learning with goal-conditioned reinforcement learning to train a more controllable UAV agent from simple straight-forward tasks toward more complex missions. Their experiments show that gradually increasing task difficulty helps the UAV learn reusable control behavior. This strongly influenced the Part 3 curriculum. Instead of training obstacle avoidance immediately, the project separates learning into Stage 1 vertical control, Stage 2 horizontal control, Stage 3 combined/sequential navigation, and Stage 4 sonar obstacle avoidance. This also explains why the observation/action shape is kept fixed across stages: checkpoints can transfer from easier tasks to harder tasks without changing the policy interface.
 
-Kaufmann et al. demonstrated high-performance drone racing using deep reinforcement learning. Although drone racing is much harder than this homework, it reinforces the importance of simulation-first training, stable timing, and careful evaluation.
-
-Zhou et al. proposed an improved TD3 method for 3D UAV path planning and highlighted the role of reward design. This influenced the use of axis-specific progress terms instead of relying only on Euclidean distance.
+Overall, these papers support the final MDP design. The observation combines goal-relative navigation variables with sonar-derived obstacle-risk information. The action space remains continuous velocity control because UAV navigation is naturally continuous. The reward function combines target progress, axis-specific progress, stability, action smoothness, and sonar safety penalties. The curriculum follows the literature by teaching simple motion skills first, then adding long-distance navigation and obstacle avoidance.
 
 ## Proposed Solution
 
@@ -192,14 +190,10 @@ AI assistance was used for debugging, code review, report organization, and rewa
 
 [1] B. Kabas, "Autonomous UAV Navigation via Deep Reinforcement Learning Using PPO," in *Proc. Signal Processing and Communications Applications Conference*, 2022.
 
-[2] S. Zhang, Y. Li, and Q. Dong, "Autonomous navigation of UAV in multi-obstacle environments based on a Deep Reinforcement Learning approach," *Applied Soft Computing*, 2022.
+[2] S. Zhang, Y. Li, and Q. Dong, "Autonomous navigation of UAV in multi-obstacle environments based on a Deep Reinforcement Learning approach," *Applied Soft Computing*, vol. 115, 108194, 2022.
 
 [3] B. Joshi et al., "Sim-to-Real Deep Reinforcement Learning based Obstacle Avoidance for UAVs under Measurement Uncertainty," arXiv:2303.07243, 2023.
 
-[4] "Real-time path planning of controllable UAV by subgoals using goal-conditioned reinforcement learning," *Applied Soft Computing*, 2023.
+[4] G. T. Lee, K. J. Kim, and J. Jang, "Real-time path planning of controllable UAV by subgoals using goal-conditioned reinforcement learning," *Applied Soft Computing*, vol. 146, 110660, 2023.
 
-[5] H. Kim, J. Choi, H. Do, and G. T. Lee, "A Fully Controllable UAV Using Curriculum Learning and Goal-Conditioned Reinforcement Learning," *Drones*, 2025.
-
-[6] E. Kaufmann et al., "Champion-level drone racing using deep reinforcement learning," *Nature*, 2023.
-
-[7] Y. Zhou et al., "Three-Dimensional Path Planning of UAVs in a Complex Dynamic Environment Based on EE-TD3," *Symmetry*, 2023.
+[5] H. Kim, J. Choi, H. Do, and G. T. Lee, "A Fully Controllable UAV Using Curriculum Learning and Goal-Conditioned Reinforcement Learning: From Straight Forward to Round Trip Missions," *Drones*, vol. 9, no. 1, 26, 2025.
