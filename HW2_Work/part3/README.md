@@ -45,10 +45,14 @@ python3 train.py --stage 6 --smoke
 
 ## Training Order
 
+For deadline runs, `--step-dt 0.05` is a reasonable speed-up. Keep the same
+`--step-dt` when evaluating a model. The default is `0.1`, which is slower but
+more conservative for Gazebo physics.
+
 ```bash
-python3 train.py --stage 1 --variant A --timesteps 30000
-python3 train.py --stage 1 --variant B --resume-from models/stage1/variantA/runXXX/best/best_success_model.zip --timesteps 50000
-python3 train.py --stage 2 --variant A --resume-from models/stage1/variantB/runXXX/best/best_success_model.zip --timesteps 50000
+python3 train.py --stage 1 --variant A --timesteps 30000 --step-dt 0.05
+python3 train.py --stage 1 --variant B --resume-from models/stage1/variantA/runXXX/best/best_success_model.zip --timesteps 50000 --step-dt 0.05
+python3 train.py --stage 2 --variant A --resume-from models/stage1/variantB/runXXX/best/best_success_model.zip --timesteps 50000 --step-dt 0.05
 python3 train.py --stage 2 --variant B --resume-from models/stage2/variantA/runXXX/best/best_success_model.zip --timesteps 70000
 python3 train.py --stage 3 --variant A --resume-from models/stage2/variantB/runXXX/best/best_success_model.zip --timesteps 100000
 python3 train.py --stage 3 --variant B --resume-from models/stage3/variantA/runXXX/best/best_success_model.zip --timesteps 120000
@@ -64,7 +68,8 @@ python3 test.py \
   --stage 1 \
   --variant A \
   --model models/stage1/variantA/runXXX/best/best_success_model.zip \
-  --episodes 10
+  --episodes 10 \
+  --step-dt 0.05
 ```
 
 Each training run saves `run_config.json`; each evaluation saves

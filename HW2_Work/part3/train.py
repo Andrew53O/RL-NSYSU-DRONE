@@ -145,6 +145,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--resume-from", type=Path, default=None)
     parser.add_argument("--success-distance", type=float, default=0.15)
     parser.add_argument("--max-steps", type=int, default=800)
+    parser.add_argument(
+        "--step-dt",
+        type=float,
+        default=0.1,
+        help="Seconds of ROS/Gazebo time to wait after each action. Use 0.05 for faster deadline runs.",
+    )
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--n-steps", type=int, default=512)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -233,6 +239,7 @@ def write_run_config(path: Path, args: argparse.Namespace, spec_name: str, run_n
         "target_override": list(args.target) if args.target else None,
         "success_distance": args.success_distance,
         "max_steps": args.max_steps,
+        "step_dt": args.step_dt,
         "timesteps": 1_000 if args.smoke else args.timesteps,
         "smoke": args.smoke,
         "resume_from": str(args.resume_from) if args.resume_from else None,
@@ -254,6 +261,13 @@ def write_run_config(path: Path, args: argparse.Namespace, spec_name: str, run_n
 
 def main() -> None:
     args = parse_args()
+    if args.step_dt <= 0.0:
+        raise SystemExit("--step-dt must be greater than 0.0")
+    if args.step_dt < 0.03:
+        print(
+            "Warning: --step-dt below 0.03 can make training fast but less stable in Gazebo. "
+            "Prefer 0.05 for a modest speed-up."
+        )
     variant = normalize_variant(args.stage, args.variant)
     spec = get_stage_spec(args.stage, variant)
     total_timesteps = 1_000 if args.smoke else args.timesteps
@@ -286,6 +300,7 @@ def main() -> None:
         target_override=tuple(args.target) if args.target else None,
         max_steps=args.max_steps,
         success_distance=args.success_distance,
+        step_dt=args.step_dt,
         log_position_every=args.log_position_every,
     )
     env = Monitor(env, filename=str(monitor_path))

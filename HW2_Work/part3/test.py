@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target", nargs=3, type=float, default=None)
     parser.add_argument("--success-distance", type=float, default=0.15)
     parser.add_argument("--max-steps", type=int, default=800)
+    parser.add_argument(
+        "--step-dt",
+        type=float,
+        default=0.1,
+        help="Seconds of ROS/Gazebo time to wait after each action. Match the value used during training.",
+    )
     parser.add_argument("--csv", type=Path, default=None)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--log-position-every", type=int, default=25)
@@ -172,6 +178,7 @@ def write_config(path: Path, args: argparse.Namespace, csv_path: Path) -> None:
         "target_override": list(args.target) if args.target else None,
         "success_distance": args.success_distance,
         "max_steps": args.max_steps,
+        "step_dt": args.step_dt,
         "log_position_every": args.log_position_every,
     }
     with path.open("w") as fp:
@@ -201,6 +208,8 @@ def print_summary(rows: list[dict[str, float | int | str]]) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.step_dt <= 0.0:
+        raise SystemExit("--step-dt must be greater than 0.0")
     if not args.model.exists():
         raise SystemExit(f"Model not found: {args.model}")
     variant = normalize_variant(args.stage, args.variant)
@@ -215,6 +224,7 @@ def main() -> None:
         target_override=tuple(args.target) if args.target else None,
         max_steps=args.max_steps,
         success_distance=args.success_distance,
+        step_dt=args.step_dt,
         log_position_every=args.log_position_every,
     )
     model = PPO.load(args.model, device="cpu")
