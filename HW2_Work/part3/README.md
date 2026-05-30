@@ -88,3 +88,35 @@ python3 test.py \
 
 Each training run saves `run_config.json`; each evaluation saves
 `evalXXX.csv` plus `evalXXX_config.json`.
+
+## Stage 4 Sonar Extension
+
+Stage 4 uses active sonar with a long final goal at `(10.0, 0.0, 1.0)`.
+The policy observes a dynamic local subgoal about `1 m` ahead, while success
+and precision metrics use the final mission goal. In Gazebo, the local subgoal
+is green and the final goal is red.
+
+Place one obstacle near `x=5.0`, `y=0.0` or slightly offset, then verify sonar:
+
+```bash
+ros2 topic echo --once /simple_drone/front_sonar_center/out
+ros2 topic echo --once /simple_drone/front_sonar_left/out
+ros2 topic echo --once /simple_drone/front_sonar_right/out
+```
+
+Train Stage 4 from Stage 3B:
+
+```bash
+python3 train.py \
+  --stage 4 \
+  --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 1800 \
+  --timesteps 120000 \
+  --step-dt 0.05 \
+  --log-position-every 50 \
+  --early-stop-plateau \
+  --plateau-window 50 \
+  --plateau-patience 80 \
+  --plateau-min-delta 1.0
+```

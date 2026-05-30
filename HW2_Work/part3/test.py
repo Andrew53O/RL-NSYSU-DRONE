@@ -123,6 +123,10 @@ def run_episode(env: DroneCurriculumEnv, model: PPO, max_steps: int) -> dict[str
         "final_dx": float(info["dx"]),
         "final_dy": float(info["dy"]),
         "final_dz": float(info["dz"]),
+        "mission_goal_x": float(info.get("mission_goal_x", 0.0)),
+        "mission_goal_y": float(info.get("mission_goal_y", 0.0)),
+        "mission_goal_z": float(info.get("mission_goal_z", 0.0)),
+        "mission_goal_distance": float(info.get("mission_goal_distance", info["distance_to_target"])),
         "episode_return": total_reward,
         "steps": steps,
         "targets_reached": targets_reached,
@@ -149,6 +153,10 @@ def write_csv(path: Path, rows: list[dict[str, float | int | str]]) -> None:
         "final_dx",
         "final_dy",
         "final_dz",
+        "mission_goal_x",
+        "mission_goal_y",
+        "mission_goal_z",
+        "mission_goal_distance",
         "episode_return",
         "steps",
         "targets_reached",
@@ -197,6 +205,7 @@ def print_summary(rows: list[dict[str, float | int | str]]) -> None:
     print(f"crash_or_unsafe_rate: {len(unsafe_rows) / total:.3f}")
     print(f"average_return: {mean(float(row['episode_return']) for row in rows):.3f}")
     print(f"average_distance_to_target: {mean(float(row['final_distance_to_target']) for row in rows):.3f}")
+    print(f"average_mission_goal_distance: {mean(float(row['mission_goal_distance']) for row in rows):.3f}")
     print(f"average_steps_to_target: {mean(float(row['steps']) for row in success_rows) if success_rows else 0.0:.3f}")
     print(f"average_sequence_completion_rate: {mean(float(row['sequence_completion_rate']) for row in rows):.3f}")
     print(f"average_cmd_vx: {mean(float(row['average_cmd_vx']) for row in rows):.3f}")

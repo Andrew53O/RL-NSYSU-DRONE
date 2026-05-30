@@ -74,7 +74,9 @@ class BestTrainingModelCallback(BaseCallback):
             reward = float(episode_info["r"])
             status = str(info.get("status", "unknown"))
             success = 1 if status == "success" else 0
-            distance = float(info.get("distance_to_target", float("inf")))
+            distance = float(
+                info.get("mission_goal_distance", info.get("distance_to_target", float("inf")))
+            )
             targets_reached = int(info.get("targets_reached", 0))
             self.rewards.append(reward)
             self.successes.append(success)

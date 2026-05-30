@@ -43,6 +43,9 @@ SONAR_SECTORS = (
 SONAR_COUNT = len(SONAR_SECTORS)
 OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part3_rl_target_marker"
+STAGE4_FINAL_GOAL = np.array([10.0, 0.0, 1.0], dtype=np.float32)
+STAGE4_LOCAL_GOAL_STEP = 1.0
+STAGE4_MARKER_UPDATE_STEPS = 25
 TARGET_MARKER_COLORS = (
     (0.0, 1.0, 0.1, 1.0),  # first target: green
     (0.0, 0.25, 1.0, 1.0),  # second target: blue
@@ -142,8 +145,8 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
     ),
     (4, "A"): StageSpec(
         name="stage4_single_obstacle",
-        description="single-obstacle sonar avoidance",
-        fixed_targets=((2.5, 0.0, 0.9),),
+        description="long-goal single-obstacle sonar avoidance with dynamic local subgoal",
+        fixed_targets=((10.0, 0.0, 1.0),),
         sonar_enabled=True,
         focus="obstacle",
     ),
@@ -343,6 +346,8 @@ class DroneRosBridge(Node):
         for index, target in enumerate(targets):
             marker_name = self._target_marker_name(index, target_count)
             color = TARGET_MARKER_COLORS[index % len(TARGET_MARKER_COLORS)]
+            if target_count == 2 and index == 1:
+                color = TARGET_MARKER_COLORS[2]
             req = SpawnEntity.Request()
             req.name = marker_name
             req.xml = target_marker_sdf(marker_name, color)
@@ -393,7 +398,7 @@ class DroneCurriculumEnv(gym.Env):
         self.log_position_every = max(0, int(log_position_every))
         self.ros = DroneRosBridge(namespace=namespace)
 
-        self.xy_limit = 8.0
+        self.xy_limit = 12.0 if self.stage >= 4 else 8.0
         self.max_altitude = 5.0
         self.min_altitude = 0.25
         self.takeoff_altitude = 0.5
@@ -406,6 +411,7 @@ class DroneCurriculumEnv(gym.Env):
         self.target_index = 0
         self.step_count = 0
         self.previous_distance: float | None = None
+        self.previous_final_distance: float | None = None
         self.previous_abs_error: np.ndarray | None = None
         self.previous_action = np.zeros(3, dtype=np.float32)
         self.previous_sonar = np.full(SONAR_COUNT, self.max_sonar_range, dtype=np.float32)
@@ -430,7 +436,17 @@ class DroneCurriculumEnv(gym.Env):
 
     @property
     def current_target(self) -> np.ndarray:
+        if self.stage == 4:
+            return self._stage4_local_target()
         return self.targets[self.target_index]
+
+    @property
+    def mission_goal(self) -> np.ndarray:
+        if self.stage == 4:
+            if len(self.targets) > 0:
+                return self.targets[-1]
+            return STAGE4_FINAL_GOAL
+        return self.targets[-1]
 
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None):
         super().reset(seed=seed)
@@ -441,11 +457,11 @@ class DroneCurriculumEnv(gym.Env):
         self.targets_reached = 0
         self.step_count = 0
         self.previous_distance = None
+        self.previous_final_distance = None
         self.previous_abs_error = None
         self.previous_action = np.zeros(3, dtype=np.float32)
         self.previous_sonar = np.full(SONAR_COUNT, self.max_sonar_range, dtype=np.float32)
         self.last_action_was_filtered = False
-        self.ros.update_target_markers(self.targets)
 
         takeoff_ok = False
         for attempt in range(3):
@@ -458,7 +474,9 @@ class DroneCurriculumEnv(gym.Env):
             raise RuntimeError("Part 3 reset/takeoff failed; restart Gazebo and try again.")
 
         obs = self._get_obs()
+        self._update_stage_markers(force=True)
         self.previous_distance = float(self.last_info["distance_to_target"])
+        self.previous_final_distance = float(self.last_info["mission_goal_distance"])
         self.previous_abs_error = self._abs_error()
         self._log_position(force=True)
         return obs, self._info("running")
@@ -476,6 +494,7 @@ class DroneCurriculumEnv(gym.Env):
         self._log_position()
         info = self.last_info
         distance = float(info["distance_to_target"])
+        mission_goal_distance = float(info["mission_goal_distance"])
         dx = float(info["dx"])
         dy = float(info["dy"])
         dz = float(info["dz"])
@@ -490,6 +509,10 @@ class DroneCurriculumEnv(gym.Env):
             scale = 10.0 if distance >= 0.5 else 18.0
             reward += scale * (self.previous_distance - distance)
         self.previous_distance = distance
+
+        if self.stage == 4 and self.previous_final_distance is not None:
+            reward += 8.0 * (self.previous_final_distance - mission_goal_distance)
+        self.previous_final_distance = mission_goal_distance
 
         current_abs_error = np.array([x_error, y_error, z_error], dtype=np.float32)
         if self.previous_abs_error is not None:
@@ -514,6 +537,8 @@ class DroneCurriculumEnv(gym.Env):
         if self.sonar_enabled:
             reward -= 2.0 * obstacle_mean_risk**2
             reward -= 4.0 * obstacle_max_risk**2
+            if self.stage == 4 and obstacle_max_risk > 0.2 and abs(float(info["vx"])) < 0.05:
+                reward -= 0.2
 
         terminated = False
         truncated = False
@@ -553,6 +578,8 @@ class DroneCurriculumEnv(gym.Env):
 
         if status in {"success", "timeout"}:
             self._log_position(force=True)
+        elif self.stage == 4 and self.step_count % STAGE4_MARKER_UPDATE_STEPS == 0:
+            self._update_stage_markers(force=True)
         if terminated or truncated:
             self.ros.stop()
         return obs, float(reward), terminated, truncated, self._info(status)
@@ -566,10 +593,30 @@ class DroneCurriculumEnv(gym.Env):
     def _sample_targets(self) -> np.ndarray:
         if self.target_override is not None:
             return np.array([self.target_override], dtype=np.float32)
+        if self.stage == 4:
+            return np.array([STAGE4_FINAL_GOAL], dtype=np.float32)
         if self.stage_spec.sequence_count > 1:
             targets = [self._sample_one_target(index) for index in range(self.stage_spec.sequence_count)]
             return np.array(targets, dtype=np.float32)
         return np.array([self._sample_one_target(0)], dtype=np.float32)
+
+    def _stage4_local_target(self) -> np.ndarray:
+        mission_goal = self.mission_goal
+        if self.ros.pose is None:
+            local_x = min(STAGE4_LOCAL_GOAL_STEP, float(mission_goal[0]))
+            return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
+        local_x = min(float(self.ros.pose[0]) + STAGE4_LOCAL_GOAL_STEP, float(mission_goal[0]))
+        return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
+
+    def _update_stage_markers(self, force: bool = False) -> None:
+        if not force:
+            return
+        if self.stage == 4:
+            self.ros.update_target_markers(
+                np.array([self._stage4_local_target(), self.mission_goal], dtype=np.float32)
+            )
+        else:
+            self.ros.update_target_markers(self.targets)
 
     def _sample_one_target(self, index: int) -> tuple[float, float, float]:
         if self.stage_spec.x_bounds is None and self.stage_spec.z_bounds is None:
@@ -600,6 +647,8 @@ class DroneCurriculumEnv(gym.Env):
         return 0.35 * x_error + 0.25 * y_error + 0.35 * z_error
 
     def _target_reached(self, x_error: float, y_error: float, z_error: float, distance: float) -> bool:
+        if self.stage == 4 and self.ros.pose is not None:
+            return float(np.linalg.norm(self.mission_goal - self.ros.pose)) < self.success_distance
         if self.stage_spec.focus == "vertical":
             lateral_error = math.hypot(x_error, y_error)
             lateral_tolerance = max(0.20, 1.5 * self.success_distance)
@@ -650,6 +699,11 @@ class DroneCurriculumEnv(gym.Env):
 
         total_targets = max(len(self.targets), 1)
         target_progress = self.target_index / max(total_targets - 1, 1)
+        if self.stage == 4 and pose is not None and math.isfinite(float(pose[0])):
+            target_progress = float(np.clip(pose[0] / max(float(self.mission_goal[0]), 0.1), 0.0, 1.0))
+        dx_norm = 10.0 if self.stage >= 4 else 3.0
+        dy_norm = 5.0 if self.stage >= 4 else 3.0
+        distance_norm = 12.0 if self.stage >= 4 else 4.0
         obs = np.concatenate(
             [
                 np.array(
@@ -660,10 +714,10 @@ class DroneCurriculumEnv(gym.Env):
                         velocity[0],
                         velocity[1],
                         velocity[2] / 0.5,
-                        delta[0] / 3.0,
-                        delta[1] / 3.0,
+                        delta[0] / dx_norm,
+                        delta[1] / dy_norm,
                         delta[2] / 1.5,
-                        distance / 4.0,
+                        distance / distance_norm,
                         target_progress,
                         total_targets / 3.0,
                     ],
@@ -678,6 +732,10 @@ class DroneCurriculumEnv(gym.Env):
         ).astype(np.float32)
 
         min_obstacle = float(np.min(sonar)) if self.sonar_enabled else self.max_sonar_range
+        mission_delta = self.mission_goal - pose
+        mission_distance = (
+            float(np.linalg.norm(mission_delta)) if np.all(np.isfinite(mission_delta)) else math.nan
+        )
         self.last_info = {
             "x": float(pose[0]),
             "y": float(pose[1]),
@@ -689,6 +747,10 @@ class DroneCurriculumEnv(gym.Env):
             "dy": float(delta[1]),
             "dz": float(delta[2]),
             "distance_to_target": distance,
+            "mission_goal_x": float(self.mission_goal[0]),
+            "mission_goal_y": float(self.mission_goal[1]),
+            "mission_goal_z": float(self.mission_goal[2]),
+            "mission_goal_distance": mission_distance,
             "target_index": self.target_index,
             "total_targets": total_targets,
             "targets_reached": self.targets_reached,
