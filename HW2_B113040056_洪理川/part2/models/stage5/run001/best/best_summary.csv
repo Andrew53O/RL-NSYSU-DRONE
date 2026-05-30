@@ -1,0 +1,2 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
+1,445,-542.294428,unsafe_sonar,-542.294428,0.0,2.3454549312591553,0,best_episode_model+best_average_model+best_success_model+best_precision_model

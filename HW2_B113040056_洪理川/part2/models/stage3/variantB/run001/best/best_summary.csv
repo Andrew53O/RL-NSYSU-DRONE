@@ -1,0 +1,2 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
+1,116,316.195293,success,316.195293,1.0,0.1040307804942131,2,best_episode_model+best_average_model+best_success_model+best_precision_model

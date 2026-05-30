@@ -1,0 +1,13 @@
+{
+  "created_at_utc": "2026-05-30T11:53:03.185453+00:00",
+  "csv": "/workspace/HW2_Work/part3/logs/eval/stage4/variantA/run004/eval001.csv",
+  "episodes": 10,
+  "log_position_every": 50,
+  "max_steps": 1800,
+  "model": "models/stage4/run004/best/best_precision_model.zip",
+  "stage": 4,
+  "step_dt": 0.05,
+  "success_distance": 0.25,
+  "target_override": null,
+  "variant": "A"
+}

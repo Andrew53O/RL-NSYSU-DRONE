@@ -1,0 +1,12 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
+1,172,-519.965498,unsafe_sonar,-519.965498,0.0,2.1209845542907715,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+2,318,-503.539646,unsafe_sonar,-511.752572,0.0,3.6042134761810303,0,best_episode_model+best_average_model
+3,431,-431.177489,unsafe_sonar,-484.894211,0.0,5.0958099365234375,0,best_episode_model+best_average_model
+4,568,-478.010868,unsafe_sonar,-483.17337525,0.0,3.616650104522705,0,best_average_model
+5,683,-430.679517,unsafe_sonar,-472.67460359999995,0.0,5.037590026855469,0,best_episode_model+best_average_model
+6,797,-463.477464,unsafe_sonar,-471.14174699999995,0.0,5.117116451263428,0,best_average_model
+7,912,-442.539712,unsafe_sonar,-467.05574199999995,0.0,5.080989837646484,0,best_average_model
+8,1024,-438.916099,unsafe_sonar,-463.53828662499996,0.0,5.151617527008057,0,best_average_model
+31,4151,-419.690451,unsafe_sonar,-477.85930365000013,0.0,5.098675727844238,0,best_episode_model
+65,9602,-938.891275,success,-515.32000175,0.05,0.24071486294269562,0,best_success_model+best_precision_model
+71,10245,-303.421487,crash,-502.50816504999995,0.05,8.164453506469727,0,best_episode_model

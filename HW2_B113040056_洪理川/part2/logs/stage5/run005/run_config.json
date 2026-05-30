@@ -1,0 +1,33 @@
+{
+  "created_at_utc": "2026-05-30T14:07:55.840801+00:00",
+  "early_stop_plateau": {
+    "enabled": true,
+    "min_delta": 0.5,
+    "patience": 40,
+    "window": 40
+  },
+  "max_steps": 900,
+  "notes": "Sonar observation fields are masked before Stage 4.",
+  "outputs": {
+    "log_dir": "/workspace/HW2_Work/part3/logs/stage5/run005",
+    "model_dir": "/workspace/HW2_Work/part3/models/stage5/run005"
+  },
+  "ppo": {
+    "batch_size": 64,
+    "device": "cpu",
+    "gamma": 0.99,
+    "learning_rate": 0.0003,
+    "n_steps": 512,
+    "policy": "MlpPolicy"
+  },
+  "resume_from": "models/stage4/run004/best/best_precision_model.zip",
+  "run_name": "run005",
+  "smoke": false,
+  "stage": 5,
+  "stage_spec": "stage5_multi_obstacle",
+  "step_dt": 0.05,
+  "success_distance": 0.25,
+  "target_override": null,
+  "timesteps": 80000,
+  "variant": "A"
+}
