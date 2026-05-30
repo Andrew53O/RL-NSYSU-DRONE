@@ -64,6 +64,53 @@ The proposed solution is a curriculum-based PPO controller for the ROS 2/Gazebo 
 
 The implementation uses **Stable-Baselines3 PPO with `MlpPolicy`**. PPO was selected because it is stable for continuous-control simulation tasks and is easier to tune under the homework deadline than more sensitive off-policy algorithms. The same policy interface is kept across all stages so checkpoints can transfer from simple tasks into harder tasks.
 
+### Algorithm and Rationale
+
+The chosen algorithm is **Proximal Policy Optimization (PPO)**. PPO is an on-policy actor-critic algorithm that updates the policy with a clipped objective, preventing each update from changing the policy too aggressively. This is useful for the drone task because Gazebo training is noisy and unstable policies can easily produce crashes, altitude drift, or unsafe sonar behavior.
+
+PPO was chosen for three practical reasons:
+
+1. It supports continuous control, which is needed for smooth drone velocity commands.
+2. It is more stable and easier to tune than many off-policy methods under short training time.
+3. It is implemented reliably in Stable-Baselines3 and works with a standard vector observation.
+
+The policy network is Stable-Baselines3's default **`MlpPolicy`**, which uses a multilayer perceptron actor-critic architecture. The actor outputs the continuous velocity-command distribution, and the critic estimates the state value for PPO advantage calculation. I did not use a CNN because the policy does not use camera images, and I did not use an RNN/LSTM because the observation already includes short-term sonar memory through previous sonar ranges and sonar trends.
+
+### MDP Formulation
+
+The task is formulated as a Markov Decision Process:
+
+```text
+MDP = (S, A, R, gamma)
+```
+
+where:
+
+- **State `S`** is the 41-value observation vector containing pose, velocity, target-relative information, target progress, sonar readings, sonar risks, sonar memory, sonar trends, and a sonar-enabled flag.
+- **Action `A`** is the continuous velocity command `[vx_cmd, vy_cmd, vz_cmd]`.
+- **Reward `R`** combines target progress, axis-specific progress, stability, action smoothness, sonar safety, success bonus, and terminal penalties.
+- **Discount factor `gamma`** is `0.99`, so the policy values long-term progress toward the target while still reacting to immediate obstacle risk.
+
+The episode ends when the drone reaches the target, completes the target sequence, crashes, leaves the workspace, gets too close to an obstacle in sonar stages, produces invalid sensor readings, or reaches the maximum step limit.
+
+### Hyperparameter Settings
+
+The main PPO hyperparameters used for the reported Part 3 runs are:
+
+| Hyperparameter | Value | Rationale |
+| --- | ---: | --- |
+| Policy | `MlpPolicy` | Vector observation, no camera input |
+| Learning rate | `0.0003` | Standard PPO baseline; stable enough for Gazebo |
+| `n_steps` | `512` | Collects enough rollout data before each PPO update |
+| Batch size | `64` | Standard mini-batch size for PPO updates |
+| Discount factor `gamma` | `0.99` | Encourages long-term target progress |
+| Device | CPU | Sufficient for MLP policy and ROS/Gazebo bottleneck |
+| Step duration `step_dt` | `0.05 s` | Faster than `0.1 s` while remaining stable in Gazebo |
+| Stage 4 success distance | `0.25 m` | Reasonable tolerance for far target plus obstacle avoidance |
+| Stage 4 max steps | `1800` | Allows enough time for the 10 m mission |
+
+The model selection used `best_precision_model.zip` when available, because reward alone can be misleading. A model may achieve high return while still failing strict evaluation or ending too far from the mission target.
+
 ### Observation Space Design
 
 The observation space is fixed at **41 values** for all stages. Keeping the size fixed is important because PPO checkpoints cannot be resumed cleanly if the observation shape changes between stages.
