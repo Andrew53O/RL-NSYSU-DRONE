@@ -136,6 +136,97 @@ class BestTrainingModelCallback(BaseCallback):
         return True
 
 
+class PlateauStopCallback(BaseCallback):
+    """Stop training when recent episode reward stops improving."""
+
+    def __init__(
+        self,
+        log_path: Path,
+        window: int = 50,
+        patience: int = 50,
+        min_delta: float = 1.0,
+        verbose: int = 0,
+    ) -> None:
+        super().__init__(verbose=verbose)
+        self.log_path = log_path
+        self.window = max(2, int(window))
+        self.patience = max(1, int(patience))
+        self.min_delta = float(min_delta)
+        self.rewards: list[float] = []
+        self.best_average = float("-inf")
+        self.episodes_since_improvement = 0
+
+    def _on_training_start(self) -> None:
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.log_path.open("w", newline="") as fp:
+            writer = csv.DictWriter(
+                fp,
+                fieldnames=[
+                    "episode",
+                    "timesteps",
+                    "window",
+                    "moving_average_reward",
+                    "best_moving_average_reward",
+                    "episodes_since_improvement",
+                    "stopped",
+                ],
+            )
+            writer.writeheader()
+
+    def _on_step(self) -> bool:
+        for info in self.locals.get("infos", []):
+            episode_info = info.get("episode")
+            if not episode_info:
+                continue
+            self.rewards.append(float(episode_info["r"]))
+            if len(self.rewards) < self.window:
+                continue
+
+            recent_average = sum(self.rewards[-self.window :]) / self.window
+            improved = recent_average > self.best_average + self.min_delta
+            if improved:
+                self.best_average = recent_average
+                self.episodes_since_improvement = 0
+            else:
+                self.episodes_since_improvement += 1
+
+            should_stop = self.episodes_since_improvement >= self.patience
+            with self.log_path.open("a", newline="") as fp:
+                writer = csv.DictWriter(
+                    fp,
+                    fieldnames=[
+                        "episode",
+                        "timesteps",
+                        "window",
+                        "moving_average_reward",
+                        "best_moving_average_reward",
+                        "episodes_since_improvement",
+                        "stopped",
+                    ],
+                )
+                writer.writerow(
+                    {
+                        "episode": len(self.rewards),
+                        "timesteps": self.num_timesteps,
+                        "window": self.window,
+                        "moving_average_reward": recent_average,
+                        "best_moving_average_reward": self.best_average,
+                        "episodes_since_improvement": self.episodes_since_improvement,
+                        "stopped": int(should_stop),
+                    }
+                )
+            if should_stop:
+                if self.verbose:
+                    print(
+                        "Early stopping: "
+                        f"{self.window}-episode average reward plateaued "
+                        f"for {self.patience} episodes "
+                        f"(best={self.best_average:.3f}, current={recent_average:.3f})."
+                    )
+                return False
+        return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train Part 3 drone curriculum PPO.")
     parser.add_argument("--stage", type=int, choices=range(1, 7), default=1)
@@ -157,6 +248,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--checkpoint-freq", type=int, default=10_000)
     parser.add_argument("--best-window", type=int, default=20)
+    parser.add_argument(
+        "--early-stop-plateau",
+        action="store_true",
+        help="Stop when the moving average reward no longer improves.",
+    )
+    parser.add_argument("--plateau-window", type=int, default=50)
+    parser.add_argument("--plateau-patience", type=int, default=50)
+    parser.add_argument("--plateau-min-delta", type=float, default=1.0)
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--target", nargs=3, type=float, default=None)
@@ -251,6 +350,12 @@ def write_run_config(path: Path, args: argparse.Namespace, spec_name: str, run_n
             "gamma": args.gamma,
             "device": "cpu",
         },
+        "early_stop_plateau": {
+            "enabled": args.early_stop_plateau,
+            "window": args.plateau_window,
+            "patience": args.plateau_patience,
+            "min_delta": args.plateau_min_delta,
+        },
         "outputs": {"model_dir": str(model_dir), "log_dir": str(log_dir)},
         "notes": "Sonar observation fields are masked before Stage 4.",
     }
@@ -284,6 +389,7 @@ def main() -> None:
     monitor_path = log_dir / "monitor.csv"
     curve_png = log_dir / "training_curve.png"
     curve_csv = log_dir / "training_curve.csv"
+    plateau_csv = log_dir / "plateau_stop.csv"
     config_paths = [model_dir / "run_config.json", log_dir / "run_config.json"]
 
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -335,6 +441,16 @@ def main() -> None:
         callbacks = [
             BestTrainingModelCallback(best_model_dir=best_dir, window=args.best_window, verbose=1)
         ]
+        if args.early_stop_plateau:
+            callbacks.append(
+                PlateauStopCallback(
+                    log_path=plateau_csv,
+                    window=args.plateau_window,
+                    patience=args.plateau_patience,
+                    min_delta=args.plateau_min_delta,
+                    verbose=1,
+                )
+            )
         if args.checkpoint_freq > 0:
             checkpoint_dir.mkdir(parents=True, exist_ok=True)
             callbacks.append(
