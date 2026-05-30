@@ -328,7 +328,7 @@ def build_training_curve(
     plt.ylabel("Reward")
     plt.title(title)
     plt.grid(True, alpha=0.3)
-    plt.legend()
+    plt.legend(loc="lower right")
     plt.tight_layout()
     plt.savefig(png_path, dpi=150)
     plt.close()
