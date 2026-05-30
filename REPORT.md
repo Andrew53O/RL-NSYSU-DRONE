@@ -177,46 +177,6 @@ Stage 1 isolates vertical control so the policy learns how `vz_cmd` affects alti
 
 This curriculum is also useful for debugging. If Stage 4 fails, the earlier stages show whether the problem is basic flight control or obstacle reaction. In this project, Stages 1-3 worked reliably, so Stage 4 failures could be interpreted as sonar-avoidance failures rather than basic navigation failures.
 
-## Training Procedure
-
-The final pipeline was trained as a curriculum. The important commands are:
-
-```bash
-cd /workspace/HW2_Work/part3
-
-python3 train.py --stage 1 --variant A --timesteps 30000 --step-dt 0.05
-python3 train.py --stage 1 --variant B --resume-from models/stage1/variantA/run002/best/best_precision_model.zip --timesteps 50000 --step-dt 0.05
-python3 train.py --stage 2 --variant A --resume-from models/stage1/variantB/run001/best/best_precision_model.zip --timesteps 50000 --step-dt 0.05
-python3 train.py --stage 2 --variant B --resume-from models/stage2/variantA/run001/best/best_precision_model.zip --timesteps 70000 --step-dt 0.05
-python3 train.py --stage 3 --variant A --resume-from models/stage2/variantB/run001/best/best_precision_model.zip --timesteps 100000 --step-dt 0.05
-python3 train.py --stage 3 --variant B --resume-from models/stage3/variantA/run002/best/best_precision_model.zip --timesteps 120000 --step-dt 0.05
-```
-
-Stage 4 uses the saved world:
-
-```text
-nsysu_drone_description/worlds/stage4_obstacle.world
-```
-
-The world contains a cone obstacle around `x=5` and the target remains `(10, 0, 1)`.
-
-```bash
-python3 train.py \
-  --stage 4 \
-  --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
-  --success-distance 0.25 \
-  --max-steps 1800 \
-  --timesteps 120000 \
-  --step-dt 0.05 \
-  --log-position-every 50 \
-  --early-stop-plateau \
-  --plateau-window 50 \
-  --plateau-patience 80 \
-  --plateau-min-delta 1.0
-```
-
-The training script saves numbered run folders, `run_config.json`, `monitor.csv`, `training_curve.csv`, `training_curve.png`, and several checkpoints: final model, best episode, best average reward, best success, and best precision.
-
 ## Results and Discussion
 
 The following table summarizes the deterministic evaluation logs available in `HW2_Work/part3/logs/eval`.

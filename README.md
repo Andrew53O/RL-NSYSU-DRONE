@@ -219,6 +219,101 @@ COMMAND.md
 
 The current final direction is **Task D: autonomous obstacle avoidance using sonar**. The working Part 3 curriculum trains PPO through vertical control, horizontal control, combined navigation, sequential targets, and sonar obstacle avoidance.
 
+## TA Test Instructions
+
+The assignment asks for a test script that loads the trained model and demonstrates the agent's behavior in Gazebo. Use `HW2_Work/part3/test.py` for this.
+
+### 1. Start Docker
+
+On the host:
+
+```bash
+cd ~/HW2/nsysu_drone
+GPU_ID=0 ./run_docker.sh
+```
+
+Open VNC at:
+
+```text
+localhost:5901
+password: nsysudrone
+```
+
+Open a second shell:
+
+```bash
+docker exec -it nsysu_drone_vnc bash
+source /ros2_ws/install/setup.bash
+```
+
+### 2. Launch the Stage 4 Gazebo World
+
+Inside Docker, launch the one-obstacle world:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
+```
+
+Wait until Gazebo and RViz are fully open. The Stage 4 obstacle is near `x=5`, and the target marker is at `(10, 0, 1)`.
+
+### 3. Run the Trained Stage 4 Model
+
+In the second Docker shell:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 test.py \
+  --stage 4 \
+  --model models/stage4/run004/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 1800 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 100
+```
+
+Expected behavior:
+
+- The drone takes off and flies toward the far target around `(10, 0, 1)`.
+- It passes the obstacle region near `x=5` using active sonar.
+- Some runs may terminate as `unsafe_sonar`; the reported Stage 4 result was 8 successes out of 10 episodes.
+
+The test script prints summary metrics and saves a CSV under:
+
+```text
+HW2_Work/part3/logs/eval/
+```
+
+### 4. Optional Stage 5 Demonstration
+
+Stage 5 is a multi-obstacle extension. Launch:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
+```
+
+Then run a Stage 5 model if available:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 test.py \
+  --stage 5 \
+  --model models/stage5/run006/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 2200 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 100
+```
+
+If that exact model path is not present, use the best available model under:
+
+```text
+HW2_Work/part3/models/stage5/
+```
+
 Current reported results:
 
 | Stage | Result |
@@ -239,32 +334,14 @@ nsysu_drone_description/worlds/stage4_obstacle.world
 nsysu_drone_description/worlds/stage5_obstacle.world
 ```
 
-Launch Stage 5 before training or evaluation:
+Launch Stage 5 before optional evaluation:
 
 ```bash
 vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
   world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
 ```
 
-Then train from a second Docker shell:
-
-```bash
-cd /workspace/HW2_Work/part3
-python3 train.py \
-  --stage 5 \
-  --resume-from models/stage4/run004/best/best_precision_model.zip \
-  --success-distance 0.25 \
-  --max-steps 2200 \
-  --timesteps 80000 \
-  --step-dt 0.05 \
-  --log-position-every 100 \
-  --early-stop-plateau \
-  --plateau-window 50 \
-  --plateau-patience 60 \
-  --plateau-min-delta 0.5
-```
-
-`train.py` and `test.py` do not load world files. They use whichever Gazebo world is already running.
+Use the `test.py` commands above to load a trained model and demonstrate behavior. `train.py` and `test.py` do not load world files. They use whichever Gazebo world is already running.
 
 
 

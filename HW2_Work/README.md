@@ -69,43 +69,18 @@ vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
 
 Keep Gazebo running while training or testing. `train.py` and `test.py` reset the current Gazebo world; they do not choose or load the world file themselves.
 
-## Train
+## TA Test Script
 
-Run from inside Docker:
+The assignment requires a test script that loads a trained model and demonstrates the agent in Gazebo. Use `HW2_Work/part3/test.py`.
 
-```bash
-cd /workspace/HW2_Work/part3
-```
-
-Example Stage 5 continuation:
+First launch the correct Gazebo world. For the main Stage 4 Task D result:
 
 ```bash
-python3 train.py \
-  --stage 5 \
-  --resume-from models/stage4/run004/best/best_precision_model.zip \
-  --success-distance 0.25 \
-  --max-steps 2200 \
-  --timesteps 80000 \
-  --step-dt 0.05 \
-  --log-position-every 100 \
-  --early-stop-plateau \
-  --plateau-window 50 \
-  --plateau-patience 60 \
-  --plateau-min-delta 0.5
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
 ```
 
-Outputs are saved under:
-
-```text
-HW2_Work/part3/models/
-HW2_Work/part3/logs/
-```
-
-Each run saves model checkpoints, `run_config.json`, `monitor.csv`, `training_curve.csv`, and a training curve plot.
-
-## Test
-
-Example Stage 4 evaluation:
+Then run:
 
 ```bash
 cd /workspace/HW2_Work/part3
@@ -119,13 +94,32 @@ python3 test.py \
   --log-position-every 100
 ```
 
-Evaluation results are saved under:
+Expected behavior:
+
+- The drone moves toward the mission goal `(10, 0, 1)`.
+- The obstacle near `x=5` activates the front/side sonar.
+- The policy usually bends around the obstacle and reaches the far target.
+- Stage 4 evaluation result: 8/10 successes, 2/10 unsafe sonar terminations.
+
+Evaluation outputs are saved under:
 
 ```text
 HW2_Work/part3/logs/eval/
 ```
 
-Each evaluation saves an `evalXXX.csv` and matching `evalXXX_config.json`.
+For optional Stage 5 demonstration, launch `stage5_obstacle.world` and run:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 test.py \
+  --stage 5 \
+  --model models/stage5/run006/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 2200 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 100
+```
 
 ## Current Results
 
