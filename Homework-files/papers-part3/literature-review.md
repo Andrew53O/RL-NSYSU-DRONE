@@ -1,6 +1,6 @@
 # Part 3 Literature Review Notes
 
-These notes support the Part 3 curriculum design. Because the project deadline is close, the implementation focuses on PPO with a simple continuous action space and a staged curriculum up to Stage 3, while keeping the later sonar-obstacle stages documented for extension.
+These notes support the Part 3 curriculum design. Because the project deadline is close, the implementation uses PPO with a simple continuous action space and a staged curriculum. Stages 1-3 establish navigation skills, Stage 4 demonstrates sonar-based obstacle avoidance, and Stage 5 is prepared as a multiple-obstacle extension.
 
 ## Design connection to this project
 
@@ -8,7 +8,7 @@ Our Part 3 design uses:
 
 - Continuous actions: `[vx_cmd, vy_cmd, vz_cmd]`.
 - Goal-relative observations: current position, velocity, target delta, distance, target index, and masked sonar fields.
-- Curriculum learning: vertical control, horizontal control, combined navigation, then optional obstacle stages.
+- Curriculum learning: vertical control, horizontal control, combined navigation, then sonar obstacle avoidance.
 - Reward shaping: distance progress, axis-specific progress, stability penalties, action smoothness, and success bonuses.
 - Fixed observation/action shape so checkpoints can continue from easier stages to harder stages.
 
@@ -111,4 +111,4 @@ The literature supports three main decisions in this project:
 2. Curriculum learning is important because training full navigation and obstacle avoidance at once can produce unstable behavior.
 3. Goal-relative observations, target progress, and subgoals are useful for generalizing from simple vertical/horizontal control to longer missions.
 
-For this homework, the practical scope is to complete and evaluate Stages 1-3 first. Stages 4-6 remain aligned with the UAV obstacle-avoidance literature, but they require more training time and careful sonar reward tuning.
+For this homework, the practical scope reached Stage 4. The Stage 4 result shows mostly successful long-distance sonar obstacle avoidance, while Stage 5 remains an extension experiment with multiple cones.

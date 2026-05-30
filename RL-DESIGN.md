@@ -1,15 +1,14 @@
-# RL Design: Task D Sonar PPO
+# RL Design: Part 3 PPO Sonar Curriculum
 
-This document describes the current reinforcement-learning design for Task D:
-autonomous obstacle avoidance using sonar. The implementation uses PPO with an
-MLP policy. It does not use camera input, LSTM, or RNN state.
+This document records the current design used in `HW2_Work/part3`. Older Part 2 experiments were replaced by a cleaner curriculum because the reward and evaluation history became too complex to debug under the homework deadline.
 
-## Task Setup
+## Task
 
-The Gymnasium environment is `DroneSonarAvoidEnv` in
-`HW2_Work/part2/drone_env.py`.
+The selected assignment task is **Task D: Autonomous Obstacle Avoidance**. The final evaluated obstacle stage is Stage 4: the drone starts near the origin, flies toward `(10.0, 0.0, 1.0)`, and must avoid a cone obstacle around `x=5.0` using sonar. Stage 5 extends this to multiple cones.
 
-The policy controls the drone by publishing a `geometry_msgs/Twist` command to:
+## ROS Interface
+
+The policy publishes:
 
 ```text
 /simple_drone/cmd_vel
@@ -30,71 +29,46 @@ The environment reads:
 /simple_drone/side_sonar_right/out
 ```
 
-Each episode reset publishes `/simple_drone/reset` and `/simple_drone/takeoff`
-before PPO starts selecting actions.
+Each reset calls `/reset_world`, publishes `/simple_drone/reset`, lands briefly, then publishes `/simple_drone/takeoff`.
 
 ## Observation Space
 
-The observation length is fixed at `43`.
+Part 3 keeps a fixed observation shape across all stages. This allows checkpoints from easier stages to continue training in harder stages.
 
-Base navigation terms:
-
-```text
-x / 8
-y / 8
-z / 5
-vx
-vy
-vz / 0.5
-dx / 3
-dy / 3
-dz / 1.5
-distance_to_target / 3
-```
-
-The target-delta and distance terms use smaller normalization constants than
-the arena-scale pose terms. This makes the Stage 1 target error easier for PPO
-to see while keeping the same observation length.
-
-Obstacle-facing sonar sectors:
+The observation has 41 values:
 
 ```text
-front_left
-front_center
-front_right
-front_up
-front_down
-side_left
-side_right
+x, y, z
+vx, vy, vz
+dx, dy, dz
+distance_to_active_target
+target_progress
+front/side sonar ranges
+sonar risks
+previous sonar ranges
+sonar trends
+sonar_enabled flag
 ```
 
-For each of the 7 obstacle-facing sonar sectors, the observation includes:
+Stages 1-3 mask sonar:
 
 ```text
-normalized range
-risk
-previous normalized range
-trend
+sonar ranges = max safe value
+sonar risks = 0
+sonar trends = 0
+sonar_enabled = 0
 ```
 
-Risk is computed as:
+Stages 4-5 activate sonar:
 
 ```text
-clip((caution_distance - sonar_range) / caution_distance, 0.0, 1.0)
+sonar ranges = real ROS Range readings
+sonar risk = clipped proximity risk
+sonar trend = previous_range - current_range
+sonar_enabled = 1
 ```
 
-The final safety summary terms are:
-
-```text
-recent minimum obstacle sonar range
-downward sonar range
-downward sonar risk
-left-right risk balance
-up-down front risk balance
-```
-
-The downward sonar is treated separately as ground/altitude safety, not as a
-front obstacle sensor.
+This design is inspired by UAV obstacle-avoidance literature that uses compact range/risk features instead of raw camera input.
 
 ## Action Space
 
@@ -104,7 +78,7 @@ The action is continuous:
 [vx_cmd, vy_cmd, vz_cmd]
 ```
 
-Action bounds:
+Bounds:
 
 ```text
 vx_cmd: [-1.0, 1.0]
@@ -112,178 +86,47 @@ vy_cmd: [-1.0, 1.0]
 vz_cmd: [-0.5, 0.5]
 ```
 
-The action space is intentionally unchanged across all curriculum stages so
-PPO checkpoints can continue training without shape mismatch.
+The same action space is used in every stage. PPO therefore learns one control interface: velocity commands in the world-frame-like simulator convention.
 
 ## Reward Function
 
-The reward combines target progress, precision shaping, sonar safety, and
-control smoothness.
+The reward combines:
 
-Target-navigation terms:
+- target-distance progress,
+- axis-specific progress for reducing `abs(dx)`, `abs(dy)`, and `abs(dz)`,
+- distance penalty,
+- drift and stability penalties,
+- near-target braking penalty,
+- action magnitude and action smoothness penalties,
+- success bonus,
+- timeout, crash, out-of-bounds, invalid-sensor penalties,
+- sonar mean-risk and max-risk penalties in obstacle stages,
+- unsafe-sonar termination in obstacle stages.
 
-```text
-distance progress reward
-axis-specific progress reward for reducing abs(dx), abs(dy), abs(dz)
-direction reward toward the target vector
-forward direction reward toward target x
-vertical direction reward toward target z
-small reward for descending when above the target, or climbing when below it
-```
-
-Precision and altitude terms:
-
-```text
-distance penalty
-forward x-error penalty
-altitude error penalty
-above-target altitude penalty
-near-target precision penalty
-near-target axis penalty
-near-target above-target penalty
-near-target altitude-band penalty
-near-target velocity penalty
-```
-
-The near-target altitude-band penalty activates when the drone is close to the
-target and `abs(z - target_z)` exceeds the altitude tolerance. This was added
-because earlier policies learned forward motion but drifted upward near the
-target.
-
-Sonar and safety terms:
+Stage 4 and Stage 5 use the far mission goal:
 
 ```text
-mean obstacle risk penalty
-max obstacle risk penalty
-obstacle approach trend penalty
-downward sonar risk penalty
-safety-filter activation penalty
+(10.0, 0.0, 1.0)
 ```
 
-Control regularization:
+Stage 4 additionally uses an internal dynamic local subgoal about `1 m` ahead in `x`. This helps long-distance progress but is not shown as a Gazebo marker. Success and reporting use the final mission goal, not the local subgoal.
 
-```text
-action magnitude penalty
-action smoothness penalty
-```
+## Safety
 
-Terminal rewards and penalties:
+Obstacle stages terminate as `unsafe_sonar` if the obstacle sonar range becomes too small. A limited safety filter also prevents obviously dangerous forward or side commands. The filter is not intended to solve the task; it is a guardrail. Evaluation logs include safety-filter override counts so reliance on the filter is visible.
 
-```text
-success bonus
-invalid sensor penalty
-crash penalty
-out-of-bounds penalty
-unsafe front sonar penalty
-unsafe side sonar penalty
-unsafe downward sonar penalty
-timeout penalty
-```
+## Current Results
 
-## Success Criteria
+The best available deterministic evaluation results are:
 
-Stage 1 target:
+| Stage | Success Rate | Notes |
+| --- | ---: | --- |
+| 1A | 100% | Fixed altitude |
+| 1B | 100% | Random altitude |
+| 2A | 100% | Fixed x target |
+| 2B | 100% | Random x target |
+| 3A | 100% | Random x-z target |
+| 3B | 90% | Three sequential targets |
+| 4 | 80% | One-obstacle sonar avoidance |
 
-```text
-(1.0, 0.0, 0.8)
-```
-
-Strict Stage 1 precision uses:
-
-```text
-success_distance = 0.1
-```
-
-A looser `0.4 m` success distance is useful only as a sanity check. It is not
-used as the main precision criterion because PPO can learn to stop near the
-edge of the success sphere instead of flying to the target center.
-
-## Checkpoints And Logs
-
-Each training run writes outputs under:
-
-```text
-models/stageN/runXXX/
-logs/stageN/runXXX/
-```
-
-Important model checkpoints:
-
-```text
-ppo_drone.zip
-best/best_episode_model.zip
-best/best_average_model.zip
-best/best_success_model.zip
-best/best_precision_model.zip
-```
-
-For strict Stage 1 evaluation, `best_success_model.zip` is the preferred
-checkpoint because it is selected using actual episode `status == "success"`
-instead of reward alone.
-
-`best_precision_model.zip` is stricter for Stage 1 debugging: it ranks
-episodes by success first, then lower final distance, lower altitude error, and
-lower x error. This helps when the reward curve looks good but deterministic
-evaluation still times out near the target.
-
-Run016 showed the main Stage 1 failure mode was not sonar interference:
-obstacle ranges stayed safe and the safety filter did not activate. The policy
-was short in `x` and high in `z`, so the reward now penalizes high-altitude
-drift more strongly and evaluation logs average commanded velocity plus final
-velocity for diagnosis.
-
-Run017 showed another Stage 1 issue: the policy commanded maximum forward
-velocity for the whole episode, so farther targets needed more control steps.
-Training and evaluation therefore default to `max_steps=1500`, while the reward
-adds near-target braking and x-overshoot penalties so longer episodes do not
-encourage flying past the target.
-
-Each run also saves:
-
-```text
-run_config.json
-monitor.csv
-training_curve.csv
-training_curve.png
-```
-
-`run_config.json` records the target, success distance, PPO hyperparameters,
-resume checkpoint, output paths, and observation normalization constants.
-
-Evaluation writes a matching config next to each CSV:
-
-```text
-logs/eval/stageN/runXXX/eval001.csv
-logs/eval/stageN/runXXX/eval001_config.json
-```
-
-The eval config records the model path, target, success distance, episode
-count, max steps, and metrics so strict and loose evaluation runs are easy to
-compare later.
-
-## Training Notes
-
-Current Stage 1 command:
-
-```bash
-cd /workspace/HW2_Work/part2
-python3 train.py \
-  --stage 1 \
-  --timesteps 70000 \
-  --learning-rate 0.0003 \
-  --checkpoint-freq 10000 \
-  --log-position-every 100
-```
-
-Strict Stage 1 evaluation:
-
-```bash
-python3 test.py \
-  --model models/stage1/runXXX/best/best_success_model.zip \
-  --target 1.0 0.0 0.8 \
-  --episodes 10
-```
-
-After observation-scaling changes, old PPO checkpoints should not be resumed
-because the observation meaning changed even though the observation length is
-still `43`.
+Stage 4 achieved the main Task D behavior but still has a 20% unsafe-sonar failure rate, so it is successful but not fully robust.

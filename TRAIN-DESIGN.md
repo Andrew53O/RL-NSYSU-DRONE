@@ -1,83 +1,143 @@
-# PPO Training Design Document (Task D)
+# Training Design: Part 3 Curriculum
 
-This document provides a detailed breakdown of the Reinforcement Learning architecture implemented for Task D (Autonomous Obstacle Avoidance) using the Stable-Baselines3 PPO algorithm, `train.py`, and `drone_env.py`.
+This document describes the current training workflow for `HW2_Work/part3`.
 
-## 1. Environment Architecture
+## Why A Curriculum
 
-The environment bridges Gymnasium and ROS 2 / Gazebo Classic.
-Instead of using a camera, the drone uses **sonar sensors** mimicking a 7-sector spatial awareness system to keep the observation space small and the training rapid (MLP policy instead of CNN).
+Directly training a drone to fly to a far goal while avoiding obstacles is unstable. The drone first needs to learn:
 
-### 1.1 Observation Space (`observation_space`)
-The observation space is a flat, continuous 43-dimensional array (`spaces.Box`), where all values are normalized to roughly `[-2.5, 2.5]` to ensure stable neural network gradients.
+1. how `vz_cmd` changes altitude,
+2. how `vx_cmd` moves forward/backward,
+3. how to combine x and z control,
+4. how to stop near a target,
+5. how to react to sonar risk.
 
-**Dimensions Breakdown:**
-1. **Pose (3):** Normalized Drone Position `[x/8.0, y/8.0, z/5.0]`
-2. **Velocity (3):** Drone Linear Velocity `[vx, vy, vz/0.5]`
-3. **Relative Target (3):** Normalized distance to target `[dx/8.0, dy/8.0, dz/5.0]`
-4. **Euclidean Target Distance (1):** Distance to target `dist / 12.0`
-5. **Sonar Ranges (7):** Normalized readings from the 7 sectors (front_left, front_center, front_right, front_up, front_down, side_left, side_right).
-6. **Sonar Risks (7):** Processed risk factor for each sector (closer = higher risk).
-7. **Previous Sonar Ranges (7):** The ranges from the previous timestep, providing temporal awareness.
-8. **Range Trends (7):** Rate of change in obstacle distances (identifying if the drone is actively flying *towards* a wall).
-9. **Recent Obstacle Min (1):** Minimum detected obstacle range over the last few frames (memory/hysteresis).
-10. **Downward Sonar (1):** Ground proximity `down_sonar / 10.0`.
-11. **Downward Sonar Risk (1):** Penalty indicator for flying dangerously close to the ground.
-12. **Risk Balances (2):** `left_right_risk_balance` and `up_down_risk_balance`, helping the drone steer away from walls intuitively.
+The curriculum trains these skills in order and resumes PPO checkpoints from the previous stage.
 
-### 1.2 Action Space (`action_space`)
-The action space is a continuous 3-dimensional control vector determining the drone's linear velocity in `[x, y, z]` axes.
-* **Format:** `spaces.Box(low=[-1.0, -1.0, -0.5], high=[1.0, 1.0, 0.5])`
-* **Interpretation:**
-  * `action[0]`: Forward/Backward velocity (`vx`) bounded to `[-1.0, 1.0]` m/s.
-  * `action[1]`: Left/Right velocity (`vy`) bounded to `[-1.0, 1.0]` m/s.
-  * `action[2]`: Up/Down velocity (`vz`) bounded to `[-0.5, 0.5]` m/s.
-* **Safety Filter:** The simulation applies a programmatic "safety filter" layer that intercepts unsafe commands (e.g., commanding `vx=1.0` when a wall is 0.1m ahead) and overrides them. The RL agent receives a penalty when its action is overridden so it learns not to rely on the filter.
+## Stages
 
----
+| Stage | Variant | Description | Target |
+| --- | --- | --- | --- |
+| 1 | A | Fixed vertical target | `(0, 0, 1.2)` |
+| 1 | B | Random vertical target | `z in [0.7, 1.8]` |
+| 2 | A | Fixed horizontal target | `(1, 0, 0.8)` |
+| 2 | B | Random horizontal target | `x in [-1, 2]` |
+| 3 | A | Random x-z target | `x in [-1, 2.5]`, `z in [0.7, 1.8]` |
+| 3 | B | Three sequential random targets | A, B, C |
+| 4 | A | One-obstacle sonar avoidance | `(10, 0, 1)` |
+| 5 | A | Multi-obstacle sonar avoidance | `(10, 0, 1)` |
 
-## 2. Reward Function
+## PPO Settings
 
-The reward function relies heavily on dense shaping to guide the drone seamlessly towards the target while dodging obstacles. The goal is to maximize cumulative rewards per episode.
+Typical settings:
 
-### 2.1 Terminal Rewards (Episode Ending)
-* **Success:** `+300.0`. Triggered if `current_distance < 0.4` meters (target reached).
-* **Crash:** `-150.0`. Triggered if altitude `z_pos < 0.25` meters (min_altitude hit).
-* **Invalid Sensor:** `-150.0`. Triggered if ROS topics die or simulate sensor failures.
+```text
+policy = MlpPolicy
+learning_rate = 0.0003
+n_steps = 512
+batch_size = 64
+gamma = 0.99
+device = cpu
+step_dt = 0.05
+```
 
-### 2.2 Dense Rewards/Penalties (Calculated per step)
-Every `step_dt` (0.1 seconds), the following terms are accumulated:
+`step_dt=0.05` is used as a deadline-friendly speed-up. The same value should be used during evaluation.
 
-**Positive Incentives (Carrots):**
-* **Progress Reward:** Rewards closing the gap to the target. It yields `8.0 * (prev_dist - current_dist)`, and scales up to `14.0 * (prev_dist - current_dist)` if the drone is closer than 1.0m to encourage final precision.
-* **Direction Alignment:** Encourages facing the velocity vector directly toward the target. `0.20 * dot_product(action, target_direction)`
+## Checkpoints
 
-**Negative Incentives (Sticks - Continuous Penalties):**
-* **Distance Penalty:** Constantly drains `-0.06 * current_dist`. Encourages reaching the target as fast as possible to minimize time-based bleed.
-* **Sonar Risk Penalties:**
-  * **Mean Risk Penalty:** `-2.0 * obstacle_mean_risk^2`
-  * **Max Risk Penalty:** `-4.0 * obstacle_max_risk^2` (harshly penalizes the closest approaching obstacle)
-  * **Downward Risk Penalty:** `-1.0 * down_sonar_risk^2`
-* **Approach Trend Penalty:** `-1.5 * max_approach_trend`. Punishes actively accelerating into obstacles rather than just static presence near one.
-* **Near Target Penalties:** Once within 1.0m, the drone is punished for chaotic movements (`-0.35 * dist`, axis penalties, and high velocity penalties), forcing it to slow down and hover cleanly onto the target point.
-* **Control Penalties:**
-  * **Action Magnitude:** `-0.01 * norm(action)` penalizes maxing out controls constantly.
-  * **Smoothness:** `-0.02 * norm(action - prev_action)` reduces jitter and oscillation.
-  * **Filter Penalty:** `-0.25` if the fallback safety filter had to intervene to prevent a crash.
+Each run saves:
 
----
+```text
+ppo_drone.zip
+best/best_episode_model.zip
+best/best_average_model.zip
+best/best_success_model.zip
+best/best_precision_model.zip
+run_config.json
+monitor.csv
+training_curve.csv
+training_curve.png
+```
 
-## 3. Curriculum Training Stages (`train.py`)
+For curriculum transfer, prefer:
 
-Because attempting to fly perfectly to a distant target while avoiding obstacles is incredibly hard to learn from scratch, `train.py` utilizes a **CurriculumTargetWrapper**. This exposes the exact same RL environment to PPO but dynamically adjusts the spawned target's difficulty.
+```text
+best/best_precision_model.zip
+```
 
-* **Stage 1 (Easy & Fixed):** Target is very close to origin at low altitude `(1.0, 0.0, 0.8)`. The agent learns the fundamental relationship between X/Y/Z velocity, the target coordinate observation, and the progress reward.
-* **Stage 2 (Randomized Open Space):** Target spawns randomly within bounding box `X: [1.0, 3.0], Y: [-1.5, 1.5], Z: [0.8, 1.6]`. The agent learns robust 3D navigation in free space.
-* **Stage 3 (Single Path Obstacle):** Target placed at `(5.0, 3.0, 2.0)` near the direct path through obstacles. Agent starts learning sonar correlations.
-* **Stage 4 (Final Task D Configuration):** Final evaluation mode `(6.0, -3.0, 2.2)`. Fully randomized and requires threading through the Gazebo playground environment.
+It is selected using success status and final distance/error, so it is usually better than reward alone.
 
-### 3.1 PPO Hyperparameters (from `train.py`)
-* `learning_rate`: `3e-4`
-* `n_steps`: `512` (horizon for policy update calculation)
-* `batch_size`: `64`
-* `gamma`: `0.99` (discount factor prioritizing future rewards)
-* Default total timesteps: `500,000` (allowing adequate exploration for dense network convergence).
+## Early Plateau Stop
+
+Training supports plateau stopping:
+
+```bash
+--early-stop-plateau \
+--plateau-window 50 \
+--plateau-patience 60 \
+--plateau-min-delta 0.5
+```
+
+Meaning:
+
+- `plateau-window`: average reward over the latest N episodes,
+- `plateau-patience`: how many checks to wait without enough improvement,
+- `plateau-min-delta`: minimum moving-average reward improvement counted as real progress.
+
+## Stage 4 Command
+
+Launch the Stage 4 world first:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
+```
+
+Then train:
+
+```bash
+cd /workspace/HW2_Work/part3
+
+python3 train.py \
+  --stage 4 \
+  --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 1800 \
+  --timesteps 120000 \
+  --step-dt 0.05 \
+  --log-position-every 50 \
+  --early-stop-plateau \
+  --plateau-window 50 \
+  --plateau-patience 80 \
+  --plateau-min-delta 1.0
+```
+
+## Stage 5 Command
+
+Launch the Stage 5 world first:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
+```
+
+Then train:
+
+```bash
+cd /workspace/HW2_Work/part3
+
+python3 train.py \
+  --stage 5 \
+  --resume-from models/stage4/run004/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 2200 \
+  --timesteps 80000 \
+  --step-dt 0.05 \
+  --log-position-every 100 \
+  --early-stop-plateau \
+  --plateau-window 50 \
+  --plateau-patience 60 \
+  --plateau-min-delta 0.5
+```
+
+Important: `train.py` does not load Gazebo worlds. The world must already be launched.

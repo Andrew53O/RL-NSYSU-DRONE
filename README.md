@@ -204,41 +204,67 @@ ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist \
 ros2 topic pub /simple_drone/reset std_msgs/msg/Empty {} --once
 ```
 
-# Task D Sonar RL Validation
+# Homework RL Work
 
-After changing the drone xacro/URDF, rebuild inside Docker:
+The homework implementation and report files live in:
 
-```bash
-cd /ros2_ws
-colcon build --symlink-install --packages-select nsysu_drone_description nsysu_drone_bringup nsysu_drone_control
-source install/setup.bash
-launch_drone
+```text
+HW2_Work/part3/
+REPORT.md
+RL-DESIGN.md
+TRAIN-DESIGN.md
+SECTION3-LITERATURE-REVIEW.md
+COMMAND.md
 ```
 
-In a second Docker shell:
+The current final direction is **Task D: autonomous obstacle avoidance using sonar**. The working Part 3 curriculum trains PPO through vertical control, horizontal control, combined navigation, sequential targets, and sonar obstacle avoidance.
 
-```bash
-source /ros2_ws/install/setup.bash
-ros2 topic list | grep sonar
-ros2 topic echo --once /simple_drone/side_sonar_left/out
-ros2 topic echo --once /simple_drone/side_sonar_right/out
-cd /workspace/HW2_Work/part2
-python3 -m py_compile drone_env.py train.py test.py
-python3 train.py --smoke --stage 1
-python3 train.py --stage 1 --success-distance 0.1 --timesteps 70000
-python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.1 --episodes 10
-python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.4 --episodes 10  # loose sanity check
-python3 train.py --stage 2 --timesteps 50000
-python3 train.py --stage 3 --timesteps 50000
-python3 train.py --stage 4 --timesteps 50000
-python3 test.py --episodes 5 --csv logs/eval_metrics.csv
+Current reported results:
+
+| Stage | Result |
+| --- | --- |
+| 1A | Fixed altitude, 100% success |
+| 1B | Random altitude, 100% success |
+| 2A | Fixed horizontal target, 100% success |
+| 2B | Random horizontal target, 100% success |
+| 3A | Random combined x/z target, 100% success |
+| 3B | Three sequential targets, 90% success |
+| 4 | One sonar obstacle, 80% success and 20% unsafe sonar |
+| 5 | Multi-obstacle extension in progress |
+
+Stage 4 and Stage 5 use saved Gazebo worlds:
+
+```text
+nsysu_drone_description/worlds/stage4_obstacle.world
+nsysu_drone_description/worlds/stage5_obstacle.world
 ```
 
-Training outputs are grouped by stage and run number, for example
-`models/stage1/run001/ppo_drone.zip` and
-`logs/stage1/run001/training_curve.csv`. Each run also saves
-`run_config.json` in both the model and log run folders. Evaluation CSVs are
-numbered automatically if the requested filename already exists.
+Launch Stage 5 before training or evaluation:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
+```
+
+Then train from a second Docker shell:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 train.py \
+  --stage 5 \
+  --resume-from models/stage4/run004/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 2200 \
+  --timesteps 80000 \
+  --step-dt 0.05 \
+  --log-position-every 100 \
+  --early-stop-plateau \
+  --plateau-window 50 \
+  --plateau-patience 60 \
+  --plateau-min-delta 0.5
+```
+
+`train.py` and `test.py` do not load world files. They use whichever Gazebo world is already running.
 
 
 

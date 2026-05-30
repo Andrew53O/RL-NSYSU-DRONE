@@ -1,73 +1,24 @@
 # HW2 Command Runbook
 
-Use this file as the quick command reference for running the NSYSU Drone RL HW2 experiment.
+This is the current command reference for the Part 3 PPO curriculum. The final report focuses on **Task D: sonar-based obstacle avoidance**.
 
-Main goal: **Part 2, Task D - sonar-based obstacle avoidance with PPO**.
-
-Important idea:
-
-- Run Docker from the host.
-- Rebuild the Docker image only when Dockerfile-level dependencies change.
-- Launch Gazebo/RViz inside Docker.
-- Keep Gazebo running while training/testing.
-- Use a second Docker terminal for sonar checks, training, and testing.
-- Rebuild the ROS workspace after changing files in `nsysu_drone_description`, `nsysu_drone_bringup`, or `nsysu_drone_control`.
-- Do not use the old `ppo_drone.zip` after observation-space changes; train a new model.
-
-## 0. Host Terminal: Rebuild Docker Image After Dependency Changes
-
-Run this once after changing the `Dockerfile`:
-
-```bash
-cd ~/HW2/nsysu_drone
-docker build -t nsysu_drone_vnc:iron .
-```
-
-This image now includes:
-
-```text
-python3-pip
-numpy<2
-gymnasium
-stable-baselines3
-matplotlib
-pandas
-```
-
-After this image rebuild, `GPU_ID=0 ./run_docker.sh` can recreate the container without losing the RL packages.
-
-You do **not** need to rebuild the Docker image after editing `HW2_Work/part2/*.py` or normal ROS source files. For ROS source edits, rebuild only the ROS workspace inside the container.
-
-## 1. Host Terminal: Start Docker
-
-Run this on the host, not inside Docker:
+## Host: Start Docker
 
 ```bash
 cd ~/HW2/nsysu_drone
 GPU_ID=0 ./run_docker.sh
 ```
 
-Expected result:
+Open a second terminal:
 
-- Container name: `nsysu_drone_vnc`
-- VNC port: `127.0.0.1:5901`
-- VNC password: `nsysudrone`
-- You should land in a shell like `root@...:/ros2_ws#`
-
-The script mounts:
-
-```text
-~/HW2/nsysu_drone/HW2_Work -> /workspace/HW2_Work
-~/HW2/nsysu_drone/nsysu_drone_description -> /ros2_ws/src/nsysu_drone_description
-~/HW2/nsysu_drone/nsysu_drone_bringup -> /ros2_ws/src/nsysu_drone_bringup
-~/HW2/nsysu_drone/nsysu_drone_control -> /ros2_ws/src/nsysu_drone_control
+```bash
+docker exec -it nsysu_drone_vnc bash
+source /ros2_ws/install/setup.bash
 ```
 
-Because of these mounts, host edits are visible inside Docker automatically.
+## Rebuild ROS Workspace
 
-## 2. Container Terminal 1: Rebuild ROS Workspace
-
-Use this after changing URDF/Xacro, launch files, worlds, or ROS package files:
+Run this after changing worlds, launch files, URDF/Xacro, or ROS package files:
 
 ```bash
 cd /ros2_ws
@@ -75,83 +26,42 @@ colcon build --symlink-install --packages-select nsysu_drone_description nsysu_d
 source install/setup.bash
 ```
 
-You do **not** need to rebuild the Docker image for these homework edits.
+No rebuild is needed for pure `HW2_Work/part3/*.py` edits.
 
-You do **not** need this rebuild for pure Python edits under:
+## Launch Gazebo
 
-```text
-/workspace/HW2_Work/part2
-```
-
-## 3. Container Terminal 1: Launch Gazebo/RViz
-
-Still inside Docker:
+Default world:
 
 ```bash
 launch_drone
 ```
 
-Keep this terminal running.
-
-Open VNC:
-
-```text
-127.0.0.1:5901
-password: nsysudrone
-```
-
-Expected visual result:
-
-- Gazebo Classic opens.
-- RViz opens.
-- Drone appears in the world.
-- Sonar/ray cones may appear as blue/purple fan shapes if sensor visualization is enabled.
-
-## 4. Host Terminal 2: Enter The Same Container
-
-Open a second host terminal:
+Stage 4 one-obstacle world:
 
 ```bash
-docker exec -it nsysu_drone_vnc bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
 ```
 
-Then source the workspace:
+Stage 5 multi-obstacle world:
 
 ```bash
-source /ros2_ws/install/setup.bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
 ```
 
-Use this second Docker terminal for sonar checks, training, and testing.
+Important: `train.py` and `test.py` do not load a world file. Start the correct world first, then run training or testing in another terminal.
 
-## 5. Verify Python RL Dependencies
-
-Inside Docker terminal 2:
-
-```bash
-python3 -c "import numpy, gymnasium, stable_baselines3, matplotlib, pandas; print('RL packages OK')"
-```
-
-If this fails, the image was probably not rebuilt after the Dockerfile update. Rebuild it from the host:
-
-```bash
-cd ~/HW2/nsysu_drone
-docker build -t nsysu_drone_vnc:iron .
-```
-
-Why `"numpy<2"`:
-
-- Some installed compiled packages, especially OpenCV/CV2 dependencies, may not work cleanly with NumPy 2 inside this container.
-- Pinning NumPy below 2 avoids the `_ARRAY_API not found` warning/crash path.
-
-## 6. Verify Eight Sonar Topics
-
-Inside Docker terminal 2:
+## Verify Sonar
 
 ```bash
 ros2 topic list | grep sonar
+ros2 topic echo --once /simple_drone/front_sonar_center/out
+ros2 topic echo --once /simple_drone/front_sonar_left/out
+ros2 topic echo --once /simple_drone/front_sonar_right/out
 ```
 
-Expected sonar topics:
+Expected obstacle-stage sonar topics include:
 
 ```text
 /simple_drone/sonar/out
@@ -164,207 +74,89 @@ Expected sonar topics:
 /simple_drone/side_sonar_right/out
 ```
 
-Echo each topic once:
+## Syntax Check
 
 ```bash
-ros2 topic echo --once /simple_drone/sonar/out
-ros2 topic echo --once /simple_drone/front_sonar_left/out
-ros2 topic echo --once /simple_drone/front_sonar_center/out
-ros2 topic echo --once /simple_drone/front_sonar_right/out
-ros2 topic echo --once /simple_drone/front_sonar_up/out
-ros2 topic echo --once /simple_drone/front_sonar_down/out
-ros2 topic echo --once /simple_drone/side_sonar_left/out
-ros2 topic echo --once /simple_drone/side_sonar_right/out
-```
-
-If any front sonar topic is missing:
-
-1. Stop `launch_drone`.
-2. Rebuild the ROS workspace.
-3. Source `install/setup.bash`.
-4. Launch again.
-
-## 7. Manual Drone Movement For Sonar Check
-
-Take off:
-
-```bash
-ros2 topic pub /simple_drone/takeoff std_msgs/msg/Empty {} --once
-```
-
-Move forward slowly:
-
-```bash
-ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.3, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --rate 5
-```
-
-Stop:
-
-```bash
-ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --once
-```
-
-Move sideways:
-
-```bash
-ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.3, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --rate 5
-```
-
-Move upward:
-
-```bash
-ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.0, y: 0.0, z: 0.3}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --rate 5
-```
-
-Reset:
-
-```bash
-ros2 topic pub /simple_drone/reset std_msgs/msg/Empty {} --once
-```
-
-Use this only to verify that the sonar readings react to the world. Training uses `train.py`, not manual commands.
-
-## 8. Smoke Train PPO
-
-Keep Gazebo running in Docker terminal 1.
-
-In Docker terminal 2:
-
-```bash
-cd /workspace/HW2_Work/part2
+cd /workspace/HW2_Work/part3
 python3 -m py_compile drone_env.py train.py test.py
-python3 train.py --smoke --stage 1
 ```
 
-Expected outputs:
+## Train Stage 5
+
+Launch `stage5_obstacle.world` first, then:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 train.py \
+  --stage 5 \
+  --resume-from models/stage4/run004/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 2200 \
+  --timesteps 80000 \
+  --step-dt 0.05 \
+  --log-position-every 100 \
+  --early-stop-plateau \
+  --plateau-window 50 \
+  --plateau-patience 60 \
+  --plateau-min-delta 0.5
+```
+
+## Test Stage 4
+
+Launch `stage4_obstacle.world` first, then:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 test.py \
+  --stage 4 \
+  --model models/stage4/run004/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 1800 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 100
+```
+
+## Test Stage 5
+
+Launch `stage5_obstacle.world` first, then replace `runXXX` with the trained run:
+
+```bash
+cd /workspace/HW2_Work/part3
+python3 test.py \
+  --stage 5 \
+  --model models/stage5/runXXX/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 2200 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 100
+```
+
+## Current Report Results
+
+| Stage | Result |
+| --- | --- |
+| 1A | 100% success |
+| 1B | 100% success |
+| 2A | 100% success |
+| 2B | 100% success |
+| 3A | 100% success |
+| 3B | 90% success |
+| 4 | 80% success, 20% unsafe sonar |
+| 5 | In progress |
+
+## Output Locations
+
+Training:
 
 ```text
-/workspace/HW2_Work/part2/models/stage1/smoke_run001/ppo_drone.zip
-/workspace/HW2_Work/part2/models/stage1/smoke_run001/run_config.json
-/workspace/HW2_Work/part2/logs/stage1/smoke_run001/monitor.csv
-/workspace/HW2_Work/part2/logs/stage1/smoke_run001/training_curve.png
-/workspace/HW2_Work/part2/logs/stage1/smoke_run001/training_curve.csv
-/workspace/HW2_Work/part2/logs/stage1/smoke_run001/run_config.json
+HW2_Work/part3/models/
+HW2_Work/part3/logs/
 ```
 
-A smoke run only proves the pipeline works. It does not prove good obstacle avoidance yet.
-Training runs are numbered by default, so later runs use `run002`, `run003`, etc.
-
-## 9. Test The Current Model
-
-Inside Docker terminal 2:
-
-```bash
-cd /workspace/HW2_Work/part2
-python3 test.py --episodes 5 --csv logs/eval_metrics.csv
-```
-
-Expected printed fields:
+Evaluation:
 
 ```text
-episodes: ...
-success_rate: ...
-crash_rate: ...
-timeout_rate: ...
-average_return: ...
-average_minimum_obstacle_sonar_distance: ...
-safety_filter_activation_count: ...
-side_sonar_near_miss_count: ...
+HW2_Work/part3/logs/eval/
 ```
-
-Useful interpretation:
-
-- `success`: reached the target.
-- `timeout`: did not reach target in time.
-- `unsafe_front_sonar`: obstacle got too close.
-- `unsafe_side_sonar`: side wall or side obstacle got too close.
-- `unsafe_down_sonar` or `crash`: flew too low.
-- `out_of_bounds`: left the safe flight area.
-- Many `safety_filter_overrides` means PPO is still choosing risky actions.
-
-## 10. Longer Training
-
-Run this after smoke training works:
-
-```bash
-cd /workspace/HW2_Work/part2
-python3 train.py --stage 1 --success-distance 0.1 --timesteps 70000
-python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.1 --episodes 10
-python3 test.py --model models/stage1/runXXX/best/best_success_model.zip --target 1.0 0.0 0.8 --success-distance 0.4 --episodes 10
-python3 train.py --stage 2 --timesteps 50000
-python3 train.py --stage 3 --timesteps 50000
-python3 train.py --stage 4 --timesteps 50000
-```
-
-For a better final result, try:
-
-```bash
-python3 train.py --stage 4 --timesteps 100000
-```
-
-Training is slow because Gazebo is the environment. A longer run is more meaningful than a smoke run.
-
-## 11. Collect Report Evidence
-
-Save or screenshot these:
-
-```bash
-ros2 topic list | grep sonar
-```
-
-```bash
-ros2 topic echo --once /simple_drone/front_sonar_center/out
-ros2 topic echo --once /simple_drone/front_sonar_up/out
-ros2 topic echo --once /simple_drone/front_sonar_down/out
-ros2 topic echo --once /simple_drone/side_sonar_left/out
-ros2 topic echo --once /simple_drone/side_sonar_right/out
-```
-
-Also save:
-
-```text
-HW2_Work/part2/logs/stage4/run001/training_curve.png
-HW2_Work/part2/logs/eval_metrics.csv
-```
-
-Run final test and copy the printed result into the report:
-
-```bash
-cd /workspace/HW2_Work/part2
-python3 test.py --episodes 5 --csv logs/eval_metrics.csv
-```
-
-## 12. Part 1 Evidence If Time Allows
-
-Run the simple controller:
-
-```bash
-cd /ros2_ws
-source install/setup.bash
-ros2 run nsysu_drone_control fly_straight
-```
-
-If `ros2 run` does not find it, use the source script directly:
-
-```bash
-python3 /ros2_ws/src/nsysu_drone_control/fly_straight.py
-```
-
-Capture:
-
-- Gazebo/RViz screenshot.
-- Terminal output.
-- Notes for several target positions if time allows.
-
-## 13. Git Checkpoint And Push
-
-From the host repo:
-
-```bash
-cd ~/HW2/nsysu_drone
-git status
-git log --oneline -5
-git push
-```
-
-If push asks for a password, use a GitHub token, not your GitHub account password.

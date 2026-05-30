@@ -1,383 +1,192 @@
-# HW2 Task D Report Notes
+# Reinforcement Learning Homework 2 Report
 
-## Why Obstacles Matter
+## Task Definition and Motivation
 
-For Task D, the agent must experience obstacles during training. If the training world only rewards flying to a target, PPO may learn target navigation but not obstacle avoidance.
+This project addresses **Task D: Autonomous Obstacle Avoidance** in the NSYSU Drone ROS 2 and Gazebo Classic simulator. The final goal is to train a drone policy that can navigate toward a target while reacting to sonar-based obstacle information. Because the deadline is short, the project intentionally uses sonar instead of camera input. A camera-based policy would require image preprocessing, a larger neural network, and more simulation time. Sonar gives a compact local-obstacle signal that is easier to train with PPO.
 
-However, do not begin with many obstacles. A cluttered world makes early learning noisy and hard to debug. Use a curriculum: start simple, verify the sensors and RL loop, then gradually increase obstacle difficulty.
+The final implementation is in `HW2_Work/part3`. It uses a clean curriculum instead of the earlier, more complex Part 2 experiments. The curriculum first teaches basic motion skills, then introduces sequential targets, then activates sonar for obstacle avoidance:
 
-## Important Sonar Limitation
+| Stage | Skill | Sonar Used | Main Goal |
+| --- | --- | --- | --- |
+| 1A | Fixed vertical control | No | Reach `(0, 0, 1.2)` |
+| 1B | Random vertical control | No | Generalize altitude control |
+| 2A | Fixed horizontal control | No | Reach `(1, 0, 0.8)` |
+| 2B | Random horizontal control | No | Generalize forward/back motion |
+| 3A | Random x-z navigation | No | Reach random single target |
+| 3B | Three sequential targets | No | Visit A, B, C in order |
+| 4 | One-obstacle sonar avoidance | Yes | Reach `(10, 0, 1)` past one cone |
+| 5 | Multi-obstacle sonar avoidance | Yes | Reach `(10, 0, 1)` through several cones |
 
-The original simulator publishes downward sonar on:
+The report focuses on the curriculum through Stage 4 because Stage 4 already demonstrates the core Task D requirement: autonomous obstacle avoidance with sonar. Stage 5 was prepared as an extension world with multiple cone obstacles at approximately `x=5`, `x=6.5`, and `x=8`.
 
-```text
-/simple_drone/sonar/out
-```
+## Pain Points of Classical Control
 
-This is a `sensor_msgs/Range` topic. In the stock drone model, this sonar behaves like a downward/coarse proximity sensor, not a full forward-facing obstacle detector. For the Task D design, we keep that downward sonar for ground/altitude safety and add five front sonar sectors:
+A proportional or PID-style controller can move a drone toward a fixed point when the environment is simple. For example, `fly_straight.py` can command velocity proportional to position error. However, this style of controller has three important limitations for the chosen task.
 
-```text
-/simple_drone/front_sonar_left/out
-/simple_drone/front_sonar_center/out
-/simple_drone/front_sonar_right/out
-/simple_drone/front_sonar_up/out
-/simple_drone/front_sonar_down/out
-```
+First, fixed gains are sensitive to distance and speed. A high gain can move quickly but overshoot the target; a low gain is stable but slow. Second, a hand-coded controller does not naturally combine several objectives such as target progress, altitude stability, lateral drift reduction, action smoothness, and obstacle clearance. Third, obstacle avoidance requires local decisions that depend on sensor context. A simple rule such as “turn left when sonar is small” may work in one layout but fail when the obstacle is shifted or when the drone also needs to keep moving toward a target.
 
-The left/center/right sectors give horizontal obstacle awareness. The up/down sectors give vertical obstacle awareness, which matters because the action includes `vz_cmd`; the policy can learn to climb when front-low or center sectors show risk.
+Reinforcement learning is plausible because the policy can learn a mapping from state features to velocity commands. In this project, PPO receives pose, velocity, target-relative information, and sonar features. The reward function shapes the desired behavior: reduce target distance, avoid obstacles, avoid unsafe sonar range, and keep control smooth. This allows the learned policy to combine navigation and local avoidance in one controller instead of relying on separate hand-written rules.
 
-Before claiming strong obstacle avoidance, verify whether the sonar range changes near cones or walls.
+## Literature Review
 
-With `launch_drone` running, open another container terminal:
+Recent UAV reinforcement learning work supports the design choices used here: PPO or actor-critic continuous control, curriculum learning, goal-relative observations, subgoals for long routes, and sensor-based obstacle evaluation.
 
-```bash
-ros2 topic echo /simple_drone/sonar/out
-```
+Kabas used PPO for autonomous UAV navigation in simulation. The important lesson for this project is that PPO can serve as a practical high-level UAV controller when the problem is formulated as an MDP and the reward gives dense navigation feedback. This influenced the choice of Stable-Baselines3 PPO and continuous velocity commands.
 
-Then move the drone near obstacles using teleop or velocity commands. Watch whether the `range` value changes.
+Zhang, Li, and Dong studied TD3-based UAV navigation in multi-obstacle environments. Their work emphasizes that obstacle avoidance requires meaningful environmental state, not only a target coordinate. This influenced the Stage 4 and Stage 5 sonar design: obstacle sectors are converted into normalized ranges, risk values, previous values, and trends.
 
-If the front sonar ranges change near obstacles, the setup can support real sonar-based obstacle avoidance.
+Joshi et al. studied PPO-based UAV obstacle avoidance under measurement uncertainty. This influenced the evaluation method. The project does not trust reward curves alone; `test.py` logs mission goal distance, minimum sonar range, unsafe sonar terminations, safety-filter overrides, and command statistics.
 
-If only the downward sonar changes with altitude or ground distance, then adding more cones in front will not help much. In that case, document the limitation and either:
+Subgoal-based UAV path planning research shows that long missions can be decomposed into smaller goal-reaching tasks. This inspired Stage 3B sequential targets and the Stage 4 internal local subgoal. The Stage 4 local subgoal is not a fixed avoidance trajectory; it only encourages steady forward progress toward the far goal while sonar determines local avoidance.
 
-- treat downward sonar as a safety/proximity cue, or
-- use the added front sonar sectors for obstacle avoidance.
+Kim et al. used curriculum learning and goal-conditioned reinforcement learning for UAV control. This directly supports the Part 3 structure: vertical control, horizontal control, combined navigation, sequential targets, then obstacle avoidance. The same observation and action shape is preserved across stages so PPO checkpoints can continue training.
 
-## Curriculum For Training
+Kaufmann et al. demonstrated high-performance drone racing using deep reinforcement learning. Although drone racing is much harder than this homework, it reinforces the importance of simulation-first training, stable timing, and careful evaluation.
 
-### Stage 0: Pipeline Smoke Test
+Zhou et al. proposed an improved TD3 method for 3D UAV path planning and highlighted the role of reward design. This influenced the use of axis-specific progress terms instead of relying only on Euclidean distance.
 
-Goal: prove ROS, Gazebo, Gymnasium, PPO, logging, and model saving work.
+## Proposed Solution
 
-Run:
+### Algorithm
 
-```bash
-cd /workspace/HW2_Work/part2
-python3 train.py --smoke
-python3 test.py
-```
+The policy is trained with **Proximal Policy Optimization (PPO)** from Stable-Baselines3 using `MlpPolicy`. PPO was selected because it is robust, widely used for continuous-control simulation tasks, and easier to tune under deadline pressure than more fragile off-policy alternatives. The implementation uses CPU training inside the provided ROS 2/Gazebo Docker workflow.
 
-Success criteria:
+### MDP Formulation
 
-- `ppo_drone.zip` is created.
-- `training_curve.png` is created.
-- `test.py` prints a status, final distance, minimum sonar range, and total reward.
+The state contains normalized drone pose, velocity, relative target information, target progress, sonar features, and a sonar-enabled flag. Sonar slots are always present, but they are masked to safe values before Stage 4. This keeps the observation shape fixed, allowing one curriculum checkpoint to continue into the next stage.
 
-This stage does not prove obstacle avoidance yet.
-
-### Stage 1: Simple Target Navigation
-
-Goal: confirm the drone can learn to move toward a target without immediately crashing or timing out.
-
-Use:
-
-```bash
-python3 train.py --timesteps 50000
-python3 test.py
-```
-
-Success criteria:
-
-- Episode length is not constantly 1-5 steps.
-- Reward is not dominated by immediate `-50` crash penalties.
-- Test status sometimes reaches `success` or gets closer to the target before timeout.
-
-### Stage 2: Sonar Behavior Check
-
-Goal: prove whether the front sonar topics can detect obstacle proximity.
-
-Run:
-
-```bash
-ros2 topic echo /simple_drone/front_sonar_center/out
-ros2 topic echo /simple_drone/front_sonar_up/out
-ros2 topic echo /simple_drone/front_sonar_down/out
-```
-
-Then move the drone:
-
-- near the ground,
-- near a wall,
-- near cones,
-- away from obstacles.
-
-Record observations:
-
-| Situation | Expected useful sonar behavior |
-|---|---|
-| Near obstacle in front | front sonar `range` decreases |
-| Away from obstacle | front sonar `range` increases |
-| Near ground only | downward sonar may represent altitude/ground clearance |
-
-If the front sonar does not react to forward obstacles, use this as a report limitation.
-
-### Stage 3: One-Obstacle Task
-
-Goal: train on one simple obstacle before adding clutter.
-
-Recommended scenario:
-
-- Drone starts near `(0, 0, 1)`.
-- Target is near `(5, 0, 1.5)`.
-- One obstacle is between start and target.
-
-Do not manually drag obstacles every episode. Manual changes are fine for early inspection, but training needs repeatable conditions.
-
-Better options:
-
-- use the existing `playground.world` obstacles if they already sit between the drone and target,
-- or edit the world/URDF setup once and keep it fixed,
-- or later add code/scripts to randomize obstacle positions.
-
-Success criteria:
-
-- Fewer unsafe sonar terminations over time.
-- Higher minimum sonar range during test.
-- Drone still makes progress toward the target.
-
-### Stage 4: Multiple Obstacles
-
-Goal: increase difficulty after one-obstacle behavior works.
-
-Add:
-
-- two or three obstacles,
-- different target locations,
-- longer episodes,
-- stricter minimum-clearance evaluation.
-
-Success criteria:
-
-- test success rate improves,
-- collision/unsafe-sonar rate decreases,
-- final distance decreases,
-- minimum clearance stays above the safety threshold.
-
-### Stage 5: Report-Ready Evaluation
-
-For the final report, evaluate:
-
-- success rate,
-- timeout rate,
-- crash or unsafe-sonar rate,
-- final distance to target,
-- minimum sonar range,
-- total episode reward,
-- representative failure cases.
-
-## Do I Need To Manually Change Obstacles In Gazebo?
-
-For quick visual experiments: yes, you can manually inspect/move around Gazebo and watch sonar readings.
-
-For RL training: no, manual changes are not ideal. Training should be repeatable. Prefer a fixed world first, then code-based randomization if time allows.
-
-Recommended path for this homework:
-
-1. Use the existing `playground.world` first.
-2. Check if sonar reacts to existing obstacles.
-3. If useful, choose a target that forces the drone near an existing obstacle.
-4. Train and test on that fixed setup.
-5. If time remains, add one controlled obstacle setup or simple randomization.
-
-## Literature-Based Design Rationale
-
-The current design is supported by the collected papers:
-
-- Yuan et al.: process sonar into compact state features for RL.
-- Mane et al.: add short-term memory and safety filtering for partially observable sonar.
-- Li et al.: track risk before collision, not only after collision.
-- Zhao et al. and Barreto-Cubero et al.: treat ultrasonic/sonar data as imperfect proximity cues that should be interpreted with context.
-
-Therefore, the planned algorithm is:
-
-```text
-PPO policy
-  input: normalized pose, velocity, target vector, front sonar ranges/risks/trends, previous front sonar, recent minimum front sonar, downward sonar risk
-  output: continuous velocity command
-  reward: target progress - distance/action/smoothness/sonar-risk/trend penalties + success/crash terms
-  safety: terminate unsafe states and apply a small emergency filter before publishing dangerous commands
-```
-
-This is not just "PPO flies to a target." It is PPO over a processed sonar-risk state, with short-term sonar memory and explicit safety conditions.
-
-## Final Observation, Action, and Reward Design
-
-### Design Goal
-
-The final RL design is not a camera-based obstacle detector and not a pure waypoint follower. It is a sonar-risk-aware PPO controller. The policy receives a compact state made from position, velocity, target direction, sonar sector distances, sonar risk, recent sonar history, and obstacle-approach trend. The policy outputs continuous velocity commands, while the environment gives shaped rewards for target progress and early obstacle avoidance.
-
-This design follows the strongest repeated idea across the collected papers: sonar should be processed into useful state features before learning. Yuan et al. use processed active-sonar information rather than raw high-dimensional perception. Mane et al. add short-term obstacle memory and a safety layer because forward-looking sonar is partially observable. Li et al. track collision risk before impact rather than waiting for collision. Zhao et al. and Barreto-Cubero et al. support treating ultrasonic/sonar data as imperfect local proximity cues that should be interpreted with task context.
-
-### Observation Space
-
-The observation vector has 35 values:
-
-```text
-[
-  x/8, y/8, z/5,
-  vx, vy, vz/0.5,
-  dx_to_target/8, dy_to_target/8, dz_to_target/5,
-  distance_to_target/12,
-
-  front_left_range/10,
-  front_center_range/10,
-  front_right_range/10,
-  front_up_range/10,
-  front_down_range/10,
-
-  front_left_risk,
-  front_center_risk,
-  front_right_risk,
-  front_up_risk,
-  front_down_risk,
-
-  previous_front_left_range/10,
-  previous_front_center_range/10,
-  previous_front_right_range/10,
-  previous_front_up_range/10,
-  previous_front_down_range/10,
-
-  front_left_trend,
-  front_center_trend,
-  front_right_trend,
-  front_up_trend,
-  front_down_trend,
-
-  min_recent_front_range/10,
-  down_sonar_range/10,
-  down_sonar_risk,
-  left_right_risk_balance,
-  up_down_risk_balance
-]
-```
-
-The pose and target-vector features tell the policy where the drone is and where it should go. I normalize `x` and `y` by the safe flight boundary of 8 m, `z` by the 5 m altitude limit, and target deltas by the same scale. This keeps the observation values in a stable range for PPO and prevents position values from dominating smaller sonar-risk values. The target-vector features are important because obstacle avoidance should remain task-aware: the drone should avoid obstacles while still trying to reach the target, which follows Zhao et al.'s idea that local obstacle behavior should be interpreted with task context.
-
-The five front sonar range features represent the local obstacle layout:
-
-```text
-left, center, right, up, down
-```
-
-These are normalized by the 10 m sonar maximum range. The left/center/right sectors provide horizontal avoidance information, while the up/down sectors provide vertical avoidance information. This matters for a drone because the action includes vertical velocity. If only a center sonar existed, the agent could know that something is close but not whether climbing is a reasonable escape action. With front-up and front-down sectors, the state can support behavior such as climbing over a lower obstacle or avoiding upward movement when the upper front sector is blocked.
-
-The five front risk values convert distance into danger:
-
-```text
-risk = clip((caution_distance - range) / caution_distance, 0, 1)
-```
-
-In the current design, `caution_distance = 1.5 m`. A risk value of 0 means the sector is clear enough, while 1 means the sector is at or beyond the close-danger region. This is based on Yuan et al.'s processed sonar-state approach: PPO should not have to infer every useful safety feature from raw range alone. Risk features make the learning problem easier because the network directly receives "how dangerous is this direction?" instead of only a distance number.
-
-The previous front sonar ranges and trend features add short-term memory:
-
-```text
-trend = previous_normalized_range - current_normalized_range
-```
-
-A positive trend means the obstacle is getting closer. This is important because a single sonar reading is partially observable. The same current distance can be safe or dangerous depending on whether the drone is moving toward the obstacle or away from it. Mane et al. motivate short-term memory for sonar because limited field of view and occlusion make one-frame sensing unreliable. Li et al. motivate this from a collision-risk perspective: the controller should react to increasing risk before collision occurs.
-
-The recent minimum front range stores the closest front-sector reading over a short window. This helps represent near misses and short-term clearance history. If the drone briefly passes close to an obstacle, the policy and report metrics can still account for that risk. This follows the safety-oriented view in Mane et al. and Li et al., where minimum clearance and risk history matter, not only the final state.
-
-The downward sonar features are kept separate from the front sonar features. The original `/simple_drone/sonar/out` is treated as ground/altitude safety, not as a forward obstacle detector. This is important for honesty in the report: the drone uses added front sonar sectors for obstacle avoidance and keeps the original downward sonar for low-altitude safety. The downward risk feature helps prevent the policy from learning aggressive downward movement near the ground.
-
-The left-right and up-down risk-balance features are compact directional cues:
-
-```text
-left_right_risk_balance = front_left_risk - front_right_risk
-up_down_risk_balance = front_up_risk - front_down_risk
-```
-
-These help PPO learn avoidance direction. For example, if left risk is high and right risk is low, moving right is likely safer. If front-down risk is high and front-up risk is low, climbing may be safer. This is similar in spirit to Barreto-Cubero et al.'s sensor-fusion/local-mapping idea: individual range readings become an interpreted local spatial structure.
-
-### Action Space
-
-The action is a continuous 3D velocity command:
+The action is a continuous velocity command:
 
 ```text
 [vx_cmd, vy_cmd, vz_cmd]
+vx, vy in [-1.0, 1.0]
+vz in [-0.5, 0.5]
 ```
 
-The limits are:
+The reward combines dense progress shaping, axis-specific shaping, stability penalties, action penalties, success bonuses, and terminal penalties. From Stage 4 onward it also includes sonar risk penalties and unsafe-sonar termination. The discount factor is set through the PPO configuration, typically `gamma = 0.99`.
+
+### Observation Space
+
+The Part 3 observation is a fixed 41-dimensional vector:
 
 ```text
-vx_cmd: [-1.0, 1.0]
-vy_cmd: [-1.0, 1.0]
-vz_cmd: [-0.5, 0.5]
+pose: x, y, z
+velocity: vx, vy, vz
+relative target: dx, dy, dz
+distance to active target
+target progress / index information
+sonar ranges for 7 obstacle-facing sectors
+sonar risk values
+previous sonar ranges
+sonar trends
+sonar_enabled flag
 ```
 
-This action space is intentionally simple because the simulator already has a lower-level drone controller that converts velocity commands into motion. PPO does not need to output motor forces or attitude commands. It only needs to choose the desired motion direction. This makes the MDP easier to train within the homework deadline.
+For Stages 1-3, sonar ranges are set to safe maximum values, sonar risks and trends are zero, and `sonar_enabled = 0`. For Stages 4-5, sonar is active and `sonar_enabled = 1`.
 
-The action design is also matched to the sonar design. The horizontal front sectors support `vy_cmd` decisions because the policy can choose left or right depending on which side is safer. The vertical front sectors support `vz_cmd` decisions because the policy can choose to climb or descend depending on whether the obstacle risk is higher above or below. The center front sector supports `vx_cmd` decisions because the policy should slow down or stop moving forward when an obstacle is directly ahead.
+### Reward Design
 
-### Reward Function
+The reward has four main groups:
 
-The reward is shaped as:
+- **Target progress:** reward for reducing distance to the active target or mission goal.
+- **Axis progress:** reward for reducing `abs(dx)`, `abs(dy)`, and `abs(dz)`.
+- **Stability/control:** penalties for unnecessary lateral drift, high speed near target, large actions, and action changes.
+- **Safety:** penalties for sonar risk, near misses, safety-filter overrides, crashes, out-of-bounds states, invalid sensor states, and timeouts.
+
+Stage 4 uses a far mission goal at `(10, 0, 1)` and a dynamic local target about 1 meter ahead in `x`. The local target improves long-distance progress, but success is measured against the final mission goal. The Gazebo marker shows only the mission target so the visual target remains clear.
+
+## Training Procedure
+
+The final pipeline was trained as a curriculum. The important commands are:
+
+```bash
+cd /workspace/HW2_Work/part3
+
+python3 train.py --stage 1 --variant A --timesteps 30000 --step-dt 0.05
+python3 train.py --stage 1 --variant B --resume-from models/stage1/variantA/run002/best/best_precision_model.zip --timesteps 50000 --step-dt 0.05
+python3 train.py --stage 2 --variant A --resume-from models/stage1/variantB/run001/best/best_precision_model.zip --timesteps 50000 --step-dt 0.05
+python3 train.py --stage 2 --variant B --resume-from models/stage2/variantA/run001/best/best_precision_model.zip --timesteps 70000 --step-dt 0.05
+python3 train.py --stage 3 --variant A --resume-from models/stage2/variantB/run001/best/best_precision_model.zip --timesteps 100000 --step-dt 0.05
+python3 train.py --stage 3 --variant B --resume-from models/stage3/variantA/run002/best/best_precision_model.zip --timesteps 120000 --step-dt 0.05
+```
+
+Stage 4 uses the saved world:
 
 ```text
-reward =
-  5.0 * progress_reward
-  - 0.02 * distance_to_target
-  - 2.0 * mean_front_risk^2
-  - 4.0 * max_front_risk^2
-  - 1.5 * max_front_approach_trend
-  - 1.0 * down_sonar_risk^2
-  - 0.01 * norm(action)
-  - 0.02 * norm(action - previous_action)
-  - 0.25 * safety_filter_used
-  + success_or_failure_terms
+nsysu_drone_description/worlds/stage4_obstacle.world
 ```
 
-The progress reward is:
+The world contains a cone obstacle around `x=5` and the target remains `(10, 0, 1)`.
+
+```bash
+python3 train.py \
+  --stage 4 \
+  --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --max-steps 1800 \
+  --timesteps 120000 \
+  --step-dt 0.05 \
+  --log-position-every 50 \
+  --early-stop-plateau \
+  --plateau-window 50 \
+  --plateau-patience 80 \
+  --plateau-min-delta 1.0
+```
+
+The training script saves numbered run folders, `run_config.json`, `monitor.csv`, `training_curve.csv`, `training_curve.png`, and several checkpoints: final model, best episode, best average reward, best success, and best precision.
+
+## Results and Discussion
+
+The following table summarizes the deterministic evaluation logs available in `HW2_Work/part3/logs/eval`.
+
+| Stage | Episodes | Success Rate | Unsafe Rate | Avg Final Distance | Avg Steps | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1A | 5 | 100% | 0% | 0.015 | 14.0 | Fixed altitude target solved |
+| 1B | 10 | 100% | 0% | 0.109 | 20.2 | Random altitude solved |
+| 2A | 10 | 100% | 0% | 0.097 | 53.1 | Fixed x target solved |
+| 2B | 10 | 100% | 0% | 0.082 | 26.6 | Random x target solved |
+| 3A | 10 | 100% | 0% | 0.104 | 40.8 | Random x-z target solved |
+| 3B | 10 | 90% | 0% | 0.155 | 279.8 | Sequential target navigation mostly solved |
+| 4 | 10 | 80% | 20% | 0.424 overall | 210.0 | Sonar obstacle avoidance mostly successful |
+
+Stage 4 is the most important Task D result. In 8 of 10 episodes, the policy reached near `(10, 0, 1)` after passing the obstacle region. Successful Stage 4 episodes ended with mission-goal distance around `0.22-0.25 m`, final `x` around `9.79-9.84`, and final `z` around `0.92-0.93`. Two episodes ended with `unsafe_sonar` near the obstacle at `x≈5`, with minimum obstacle sonar range around `0.23-0.24 m`. This shows that the policy learned obstacle avoidance but is not perfectly robust.
+
+The Stage 4 result is report-worthy because it demonstrates the intended behavior: long-distance target navigation with sonar risk influencing the path. However, the unsafe episodes are an important limitation. The policy sometimes reacts too late near the obstacle. A future improvement would train longer on randomized obstacle offsets, increase the penalty for high sonar risk, or use a slightly larger unsafe threshold so the policy learns earlier avoidance.
+
+Stage 5 was prepared as a multiple-obstacle extension. The final Stage 5 world places cones around:
 
 ```text
-progress_reward = previous_distance_to_target - current_distance_to_target
+Construction_Cone   -> (5.0,  0.0, 0.05)
+Construction_Cone_0 -> (6.5, -1.6, 0.05)
+Construction_Cone_1 -> (8.0,  0.0, 0.05)
 ```
 
-This term rewards the drone for moving closer to the target at each step. Without this term, PPO may only receive sparse success or crash information, which is difficult to learn from. The distance penalty keeps the drone goal-directed even when progress is small. Together, these terms define the navigation part of the task.
+Stage 5 uses the same final target `(10, 0, 1)`. At the time of this report, Stage 5 is an extension experiment rather than the main evaluated result.
 
-The mean front-risk penalty discourages flying through generally cluttered or risky areas. The maximum front-risk penalty is stronger because one very close obstacle is dangerous even if other sectors are clear. This makes the drone care about both overall local risk and the single most dangerous direction. Yuan et al. support this kind of shaped obstacle-avoidance reward because their RL formulation combines path planning with obstacle safety.
+## Comparison With Classical Baseline
 
-The approach-trend penalty is the most direct connection to Li et al. A collision is not only about current distance; it is also about whether the relative state is becoming more dangerous. If the sonar range is decreasing, the drone is approaching an obstacle, so the reward penalizes that trend before the unsafe threshold is crossed. This encourages proactive avoidance rather than late emergency reactions.
+The classical `fly_straight.py` style controller moves toward a target using a hand-written position-to-velocity rule. It is simple and predictable in open space, but it does not learn from obstacle encounters and does not automatically trade off target progress against sonar risk. The PPO policy is slower to develop because it requires training, but the final Stage 4 policy combines target progress and sonar avoidance in one learned controller. This is the main advantage of the RL approach for Task D.
 
-The downward-sonar risk penalty discourages unsafe altitude behavior near the ground. This is separate from front obstacle avoidance because the original sonar is downward-facing. It helps keep the drone from solving obstacle avoidance by diving toward the floor.
+## Limitations
 
-The action magnitude penalty discourages unnecessarily large velocity commands. The action-smoothness penalty discourages jittery behavior by penalizing large changes from the previous command. Smoothness is important for a drone because rapidly changing commands can cause unstable or visually poor motion in Gazebo. It also makes the learned controller easier to compare with classical control in the final reflection.
+The obstacle-avoidance behavior is not fully robust. The Stage 4 policy still produced unsafe sonar terminations in 20% of the evaluation episodes. The obstacle layout is also fixed, so the result does not prove full generalization to arbitrary worlds. Finally, the implementation uses Gazebo ground truth pose and velocity; a real drone would require state estimation and sensor calibration.
 
-The safety-filter penalty is small. It does not punish the agent as strongly as a crash, but it tells PPO that relying on the emergency filter is not ideal. The filter should be a last layer of protection, not the main controller. This matches Mane et al.'s safety-filtering idea: the learned or reactive controller proposes an action, and a safety layer prevents clearly dangerous commands.
+## Acknowledgement
 
-### Termination and Safety
+AI assistance was used for debugging, code review, report organization, and reward-design discussion. All code decisions, experiment execution, evaluation interpretation, and final report content were reviewed and adapted for this specific homework project.
 
-The episode ends with success when:
+## References
 
-```text
-distance_to_target < 0.4 m
-```
+[1] B. Kabas, "Autonomous UAV Navigation via Deep Reinforcement Learning Using PPO," in *Proc. Signal Processing and Communications Applications Conference*, 2022.
 
-The episode terminates as unsafe when:
+[2] S. Zhang, Y. Li, and Q. Dong, "Autonomous navigation of UAV in multi-obstacle environments based on a Deep Reinforcement Learning approach," *Applied Soft Computing*, 2022.
 
-```text
-min_front_sonar_range < 0.25 m
-down_sonar_range < 0.25 m
-z < 0.25 m
-abs(x) > 8 m
-abs(y) > 8 m
-z > 5 m
-sensor state is invalid
-```
+[3] B. Joshi et al., "Sim-to-Real Deep Reinforcement Learning based Obstacle Avoidance for UAVs under Measurement Uncertainty," arXiv:2303.07243, 2023.
 
-Timeout occurs after the maximum step count. Success gives a positive terminal bonus, while unsafe termination gives a large negative penalty. These conditions make the safety constraints explicit rather than leaving the policy to discover every boundary from reward shaping alone.
+[4] "Real-time path planning of controllable UAV by subgoals using goal-conditioned reinforcement learning," *Applied Soft Computing*, 2023.
 
-The emergency safety filter modifies the PPO action before publishing it only in clearly dangerous cases. If front sonar is dangerously close, it limits forward motion and pushes backward/upward. If the downward sonar is too close to the ground, it forces upward motion. This is important for a real robot-style argument: learned policies can make mistakes, so a small safety layer is reasonable for obstacle avoidance. Mane et al. is the strongest support for this design choice because their sonar obstacle-avoidance system combines reactive planning with a safety layer.
+[5] H. Kim, J. Choi, H. Do, and G. T. Lee, "A Fully Controllable UAV Using Curriculum Learning and Goal-Conditioned Reinforcement Learning," *Drones*, 2025.
 
-### Paper-To-Design Mapping
+[6] E. Kaufmann et al., "Champion-level drone racing using deep reinforcement learning," *Nature*, 2023.
 
-| Paper | Design choice supported |
-|---|---|
-| Yuan et al., 2021 | Use processed sonar range/risk features as the RL state instead of raw camera or raw unstructured sensing. |
-| Mane et al., 2024 | Add previous sonar, recent minimum sonar, and an emergency safety filter for partial observability and safety. |
-| Li et al., 2024 | Penalize increasing obstacle risk using sonar trend, not only final collision. |
-| Zhao et al., 2021 | Combine obstacle cues with target direction so avoidance remains task-aware. |
-| Barreto-Cubero et al., 2022 | Treat multiple range sectors as an interpreted local proximity structure, similar to lightweight sensor fusion/local mapping. |
-
-In summary, the controller is designed as PPO over a processed sonar-risk state. The observation gives the policy enough information to decide where the target is, where obstacles are, whether risk is increasing, and which avoidance direction is safer. The action space stays simple by using velocity commands. The reward encourages goal progress while penalizing unsafe proximity, increasing collision risk, ground risk, and unstable commands. This makes the design appropriate for the homework because it is sonar-based, explainable, trainable within the deadline, and directly connected to the collected literature.
+[7] Y. Zhou et al., "Three-Dimensional Path Planning of UAVs in a Complex Dynamic Environment Based on EE-TD3," *Symmetry*, 2023.
