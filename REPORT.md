@@ -266,6 +266,16 @@ The first and third cones are close to the direct line from the start to the tar
 
 The results were read from the saved training curves and deterministic evaluation CSV files in `HW2_Work/part3/logs`. The most important result for the assignment is Stage 4, because it is the first stage that activates sonar and requires the drone to pass an obstacle while flying toward the far mission target `(10, 0, 1)`.
 
+### Earlier Failed Attempts
+
+Before the final staged implementation, I spent many runs in the earlier `HW2_Work/part2` implementation. Those experiments failed more than twenty times while I repeatedly changed the observation space, action space, reward function, success threshold, and target settings. This was not just a tuning problem; it showed that my original task design was too difficult for the policy to learn directly.
+
+The first major mistake was trying to learn target navigation too directly. The drone was asked to reach a point with both `x` and `z` error at the same time before it had separately learned altitude control or horizontal motion. In practice, this made the policy confuse forward progress with altitude precision. Some runs learned to move forward but stayed too high, while other runs became stable in altitude but stopped short in `x`. The best behavior in that version was often only around `0.5 m` from the target, which was not accurate enough for strict success.
+
+The second major mistake was the environment timing. The environment used a `step_dt` value that did not match how quickly Gazebo was actually advancing. `step_dt` is the intended duration of one RL step: the policy sends a velocity command, waits for the simulator to respond, then reads the next observation. When this timing was not chosen well, the policy received many observations before the drone had physically moved enough. This made learning slower and noisier because the reward feedback did not match the real motion clearly. After reducing `step_dt` to `0.05 s` in the final version, training became faster while still stable enough for Gazebo.
+
+These failures are the reason I created the cleaner `HW2_Work/part3` curriculum. Instead of asking the drone to solve full navigation immediately, the final design learns from basic skills: fixed altitude, random altitude, fixed horizontal movement, random horizontal movement, combined navigation, sequential targets, and finally sonar obstacle avoidance. This made the problem easier to debug because each stage exposed a specific failure mode. In short, the failed Part 2 experiments showed that reward shaping alone was not enough; the MDP needed a better learning progression.
+
 ### Training Curves
 
 Each training curve is saved as `training_curve.csv`, with columns for episode reward and moving-average reward. The following table reports the best and final moving-average reward from the available runs. These values are not directly comparable across all stages because the reward scale changes when sequential targets and sonar penalties are introduced.
