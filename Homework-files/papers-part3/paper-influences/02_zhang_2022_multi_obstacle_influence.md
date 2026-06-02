@@ -2,7 +2,7 @@
 
 ## Citation
 
-Zhang, S., Li, Y., & Dong, Q. (2022). *Autonomous navigation of UAV in multi-obstacle environments based on a Deep Reinforcement Learning approach*. Applied Soft Computing, 115, 108194.
+Zhang, S., Li, Y., & Dong, Q. (2022). *Autonomous Navigation of UAV in Multi-Obstacle Environments Based on a Deep Reinforcement Learning Approach*. Applied Soft Computing, 115, 108194.
 
 Local access note:
 
@@ -211,4 +211,3 @@ Simple version:
 ```text
 Zhang et al. taught me what information the drone needs for obstacle avoidance.
 ```
-

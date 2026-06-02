@@ -4,10 +4,10 @@ The two papers that most influenced my design were **Kim et al. (2025)** and **Z
 
 ## Influence Table
 
-| Paper | Main Idea | What It Influenced In My Project |
-| --- | --- | --- |
-| Kim et al. (2025), *A Fully Controllable UAV Using Curriculum Learning and Goal-Conditioned Reinforcement Learning* | Train UAV behavior progressively using curriculum learning and goal-conditioned/subgoal navigation | Six-stage curriculum, target-relative observation, sequential targets, target index/progress, local subgoals for long missions |
-| Zhang, Li, and Dong (2022), *Autonomous Navigation of UAV in Multi-Obstacle Environments Based on a Deep Reinforcement Learning Approach* | Use DRL for UAV navigation in multi-obstacle environments with obstacle/environment observations | Sonar ranges, sonar risks, previous sonar ranges, sonar trends, sonar-risk reward penalties, unsafe-sonar termination |
+| Paper | Main Idea | What It Influenced In My Project | Where It Appears In My Implementation |
+| --- | --- | --- | --- |
+| Kim et al. (2025), *A Fully Controllable UAV Using Curriculum Learning and Goal-Conditioned Reinforcement Learning* | Train UAV behavior progressively using curriculum learning and goal-conditioned/subgoal navigation | Six-stage curriculum, target-relative observation, sequential targets, target index/progress, local subgoals for long missions | `HW2_Work/part3/drone_env.py` stage definitions, fixed 41-value observation, Stage 3B target sequence, Stage 4/5 local subgoal logic |
+| Zhang, Li, and Dong (2022), *Autonomous Navigation of UAV in Multi-Obstacle Environments Based on a Deep Reinforcement Learning Approach* | Use DRL for UAV navigation in multi-obstacle environments with obstacle/environment observations | Sonar ranges, sonar risks, previous sonar ranges, sonar trends, sonar-risk reward penalties, unsafe-sonar termination | `HW2_Work/part3/drone_env.py` sonar observation fields, sonar risk calculation, Stage 4/5 reward terms, `test.py` unsafe-sonar evaluation logs |
 
 ## Kim et al. (2025)
 
@@ -39,4 +39,3 @@ Zhang et al. taught me what information the drone needs to avoid obstacles.
 ```
 
 Together, these two papers shaped the final MDP design: goal-relative observations, continuous velocity actions, dense progress reward, curriculum training, sequential targets, sonar-risk features, and obstacle-safety penalties.
-
