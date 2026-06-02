@@ -26,7 +26,7 @@ The active implementation is `HW2_Work/part3`. The report focus is **Task D: son
 ## Final Submission Checks
 
 - [ ] Confirm `REPORT.md` is the final report.
-- [ ] Confirm `SECTION3-LITERATURE-REVIEW.md` matches the report references.
-- [ ] Confirm `COMMAND.md` has the commands needed to reproduce Stage 4/5.
+- [ ] Confirm `docs/literature-review-draft.md` matches the report references.
+- [ ] Confirm `docs/commands.md` has the commands needed to reproduce Stage 4/5.
 - [ ] Confirm accidental model/log folders are not committed unless intentionally required.
 - [ ] Make final Git checkpoint.

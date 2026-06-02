@@ -145,10 +145,10 @@ HW2_Work/part3/drone_env.py
 HW2_Work/part3/train.py
 HW2_Work/part3/test.py
 HW2_Work/part3/README.md
-RL-DESIGN.md
-TRAIN-DESIGN.md
+docs/rl-design.md
+docs/training-design.md
 REPORT.md
-SECTION3-LITERATURE-REVIEW.md
+docs/literature-review-draft.md
 nsysu_drone_description/worlds/stage4_obstacle.world
 nsysu_drone_description/worlds/stage5_obstacle.world
 ```

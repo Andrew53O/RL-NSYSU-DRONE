@@ -1,265 +1,89 @@
-# nsysu_drone
+# NSYSU Drone RL Homework 2
 
-A quadrotor simulation package for ROS 2 + Gazebo Classic, derived from [tum_simulator](http://wiki.ros.org/tum_simulator).
+This repository contains the ROS 2 + Gazebo Classic drone simulator and the Reinforcement Learning Homework 2 implementation for **Task D: Autonomous Obstacle Avoidance using sonar**.
 
-This version is maintained at National Sun Yat-sen University (NSYSU) and ships with a self-contained Docker workflow that runs the whole simulator (Gazebo + RViz + teleop) inside a container, with 3D rendering accelerated by GPUs and the GUI delivered to the user over VNC. It is designed for headless servers accessed via SSH, so users do not need a local X server or X11 forwarding.
+The original simulator README is preserved at [docs/Original-README.md](docs/Original-README.md).
 
-# Requirements
+## Project Goal
 
-Tested on:
-- **Host**: Ubuntu 22.04, NVIDIA driver 525+ (driver 580 verified)
-- **GPU**: Any GPU with OpenGL/EGL support (Nvidia RTX A6000, RTX 5080 verified)
-- **Docker**: 24.x with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) installed
-- **ROS 2**: iron (default), humble and rolling also supported via `--build-arg`
-- **Client**: Any VNC viewer; [TurboVNC Viewer](https://sourceforge.net/projects/turbovnc/) recommended for best performance
+The homework trains a PPO policy to control the drone with velocity commands. The final task is to fly toward a target near `(10, 0, 1)` while using sonar readings to avoid obstacles in Gazebo.
 
-# Repository layout
+The current implementation uses sonar instead of camera input because sonar keeps the observation space compact and is more practical for the assignment deadline.
 
-```
+## Repository Layout
+
+```text
 .
-├── Dockerfile                   # Builds the container from ROS 2 base + source
-├── run_docker.sh                # Convenience launcher with GPU/port flags
-├── nsysu_drone_description/     # URDF, meshes, Gazebo world, sensor plugins
-├── nsysu_drone_bringup/         # Launch files, RViz configs, parameters
-└── nsysu_drone_control/         # Teleop and control nodes
+├── HW2_Work/part3/                 # Main working RL implementation
+│   ├── drone_env.py                # Gymnasium/ROS environment
+│   ├── train.py                    # PPO training script
+│   ├── test.py                     # Deterministic evaluation script
+│   ├── models/                     # Saved PPO models
+│   └── logs/                       # Training and evaluation logs
+├── HW2_B113040056_洪理川/          # Final submission package copy
+├── Homework-files/                 # Assignment PDFs and literature notes
+├── docs/                           # Supporting runbooks and design notes
+├── nsysu_drone_bringup/            # ROS launch/config package
+├── nsysu_drone_control/            # ROS control and teleop package
+├── nsysu_drone_description/        # URDF, plugins, models, worlds
+├── REPORT.md                       # Final homework report
+├── Dockerfile
+└── run_docker.sh
 ```
 
-# Quick start (Docker + VNC)
+## Important Files
 
-### 1. Build the image
+| File | Purpose |
+| --- | --- |
+| [REPORT.md](REPORT.md) | Final report for the homework |
+| [HW2_Work/part3/README.md](HW2_Work/part3/README.md) | Part 3 implementation notes |
+| [docs/commands.md](docs/commands.md) | Docker, Gazebo, training, and testing commands |
+| [docs/training-design.md](docs/training-design.md) | Curriculum and PPO training notes |
+| [docs/rl-design.md](docs/rl-design.md) | MDP, observation, action, reward, and safety design |
+| [docs/literature-review-draft.md](docs/literature-review-draft.md) | Draft literature review notes |
+| [docs/Original-README.md](docs/Original-README.md) | Original simulator README/instructions |
 
-The image is built entirely from source. Expected build time is 15–30 minutes on first build.
+## Curriculum Summary
 
-```bash
-cd /path/to/nsysu_drone
-docker build -t nsysu_drone_vnc:iron .
-```
+The Part 3 PPO curriculum trains simple navigation skills before obstacle avoidance:
 
-To build against a different ROS 2 distro:
+| Stage | Variant | Task |
+| --- | --- | --- |
+| 1 | A | Fixed vertical target `(0, 0, 1.2)` |
+| 1 | B | Random vertical target, `z in [0.7, 1.8]` |
+| 2 | A | Fixed horizontal target `(1, 0, 0.8)` |
+| 2 | B | Random horizontal target, `x in [-1, 2]` |
+| 3 | A | Single random x-z target |
+| 3 | B | Three sequential random x-z targets |
+| 4 | A | One-obstacle sonar avoidance toward `(10, 0, 1)` |
+| 5 | A | Multi-obstacle sonar avoidance toward `(10, 0, 1)` |
 
-```bash
-docker build --build-arg ROS_DISTRO=humble  -t nsysu_drone_vnc:humble .
-docker build --build-arg ROS_DISTRO=rolling -t nsysu_drone_vnc:rolling .
-```
+Stages 1-3 keep sonar masked to safe constant values. Stages 4-5 activate sonar observations and sonar safety rewards.
 
-### 2. Set up the SSH tunnel
+## Quick Start
 
-VNC traffic is routed through SSH so no ports need to be publicly exposed. On your local machine (PuTTY example):
-
-> Session → Connection → SSH → Tunnels
-> Source port: `5901`
-> Destination: `localhost:5901`
-> Type: Local → **Add**
-
-For OpenSSH users:
-
-```bash
-ssh -L 5901:localhost:5901 user@remote-host
-```
-
-### 3. Launch the container
-
-On the remote host:
-
-```bash
-./run_docker.sh
-```
-
-Keep this terminal open. The container is started with `--rm`, so if this
-terminal exits, the container is removed and `docker exec` will fail with:
-
-```text
-No such container: nsysu_drone_vnc
-```
-
-Environment variables control GPU selection and port mapping:
-
-```bash
-GPU_ID=3  ./run_docker.sh                    # use GPU 3 (default)
-GPU_ID=4  VNC_PORT=5902 ./run_docker.sh      # use GPU 4, map to host port 5902
-```
-
-When ready, the container prints:
-
-```
-======================================================
- TurboVNC ready  (NSYSU Drone)
-   * Host port : 5901  (tunnel via SSH)
-   * Password  : nsysudrone
-   * Display   : :1 (1920x1080)
-   * VGL_DISPLAY=egl  (NVIDIA GPU hardware rendering)
-======================================================
-```
-
-### 4. Connect with a VNC viewer
-
-On your local machine, open TurboVNC Viewer (or any VNC client) and connect to:
-
-- **Server**: `localhost:5901`
-- **Password**: `nsysudrone`
-
-An XFCE desktop will appear — all GUI windows (Gazebo, RViz, xterm) will spawn inside it.
-
-### 5. Start the simulation
-
-- First make sure the container is running:
-
-```bash
-docker ps --format "table {{.Names}}\t{{.Status}}"
-```
-
-You should see `nsysu_drone_vnc`. If not, go back to step 3 and run
-`./run_docker.sh`.
-
-- Enter a shell inside the running container. If you are already in the shell that printed the TurboVNC message, you can use that directly. Otherwise, open a new host terminal and run:
-
-```bash
-docker exec -it nsysu_drone_vnc bash
-```
-
-- Inside the container shell, start Gazebo and RViz:
-
-```bash
-launch_drone
-```
-
-- This is an alias for:
-
-```bash
-vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py
-```
-
-- `vglrun` intercepts OpenGL calls and routes them to the NVIDIA GPU for hardware-accelerated rendering. **Always prefix GUI ROS commands with `vglrun`** — running Gazebo or RViz without it will fail with GLX errors.
-
-- Use teleop window to move the drone.
-
-# Drone topics
-
-The namespace is `/simple_drone` by default (configurable, see [Configure Plugin](#configure-plugin)).
-
-### Sensors
-
-| Topic | Type |
-|---|---|
-| `~/front/image_raw` | `sensor_msgs/msg/Image` |
-| `~/bottom/image_raw` | `sensor_msgs/msg/Image` |
-| `~/sonar/out` | `sensor_msgs/msg/Range` |
-| `~/front_sonar_left/out` | `sensor_msgs/msg/Range` |
-| `~/front_sonar_center/out` | `sensor_msgs/msg/Range` |
-| `~/front_sonar_right/out` | `sensor_msgs/msg/Range` |
-| `~/front_sonar_up/out` | `sensor_msgs/msg/Range` |
-| `~/front_sonar_down/out` | `sensor_msgs/msg/Range` |
-| `~/side_sonar_left/out` | `sensor_msgs/msg/Range` |
-| `~/side_sonar_right/out` | `sensor_msgs/msg/Range` |
-| `~/imu/out` | `sensor_msgs/msg/Imu` |
-| `~/gps/nav` | `sensor_msgs/msg/NavSatFix` |
-| `~/gps/vel` | `geometry_msgs/msg/TwistStamped` |
-| `~/joint_states` | `sensor_msgs/msg/JointState` |
-
-### Control (subscribed)
-
-| Topic | Type | Purpose |
-|---|---|---|
-| `~/takeoff` | `std_msgs/msg/Empty` | Start the drone |
-| `~/land` | `std_msgs/msg/Empty` | Land the drone |
-| `~/cmd_vel` | `geometry_msgs/msg/Twist` | Steer the drone |
-| `~/reset` | `std_msgs/msg/Empty` | Reset the drone |
-| `~/posctrl` | `std_msgs/msg/Bool` | Toggle position control (give drone a pose via cmd_vel) and normal control (only use cmd_vel) |
-| `~/dronevel_mode` | `std_msgs/msg/Bool` | Toggle velocity vs. tilt control (normal mode) |
-| `~/cmd_mode` | `std_msgs/msg/Bool` | Publishes current control mode |
-| `~/state` | `std_msgs/msg/Int8` | Current state (0 = landed, 1 = flying, 2 = hovering) |
-
-### Ground truth (published)
-
-| Topic | Type |
-|---|---|
-| `~/gt_pose` | `geometry_msgs/msg/Pose` |
-| `~/gt_vel` | `geometry_msgs/msg/Twist` |
-| `~/gt_acc` | `geometry_msgs/msg/Twist` |
-
-# Common commands
-
-Once the simulation is running, any of these can be executed from a second terminal (either in the VNC desktop's xterm, or by execing into the container):
-
-
-To open a second shell inside the running container:
-
-```bash
-docker exec -it nsysu_drone_vnc bash
-```
-
-
-```bash
-# Take off
-ros2 topic pub /simple_drone/takeoff std_msgs/msg/Empty {} --once
-
-# Land
-ros2 topic pub /simple_drone/land std_msgs/msg/Empty {} --once
-
-# Send a velocity command (forward at 0.3 m/s)
-ros2 topic pub /simple_drone/cmd_vel geometry_msgs/msg/Twist \
-    "{linear: {x: 0.3, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" --once
-
-# Reset
-ros2 topic pub /simple_drone/reset std_msgs/msg/Empty {} --once
-```
-
-# Homework RL Work
-
-The homework implementation and report files live in:
-
-```text
-HW2_Work/part3/
-REPORT.md
-RL-DESIGN.md
-TRAIN-DESIGN.md
-SECTION3-LITERATURE-REVIEW.md
-COMMAND.md
-```
-
-The current final direction is **Task D: autonomous obstacle avoidance using sonar**. The working Part 3 curriculum trains PPO through vertical control, horizontal control, combined navigation, sequential targets, and sonar obstacle avoidance.
-
-## TA Test Instructions
-
-The assignment asks for a test script that loads the trained model and demonstrates the agent's behavior in Gazebo. Use `HW2_Work/part3/test.py` for this.
-
-### 1. Start Docker
-
-On the host:
+Start the Docker container from the host:
 
 ```bash
 cd ~/HW2/nsysu_drone
 GPU_ID=0 ./run_docker.sh
 ```
 
-Open VNC at:
-
-```text
-localhost:5901
-password: nsysudrone
-```
-
-Open a second shell:
+Open a second shell inside the running container:
 
 ```bash
 docker exec -it nsysu_drone_vnc bash
 source /ros2_ws/install/setup.bash
 ```
 
-### 2. Launch the Stage 4 Gazebo World
-
-Inside Docker, launch the one-obstacle world:
+Launch the Stage 4 one-obstacle Gazebo world:
 
 ```bash
 vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
   world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
 ```
 
-Wait until Gazebo and RViz are fully open. The Stage 4 obstacle is near `x=5`, and the target marker is at `(10, 0, 1)`.
-
-### 3. Run the Trained Stage 4 Model
-
-In the second Docker shell:
+In the second container shell, evaluate the trained Stage 4 policy:
 
 ```bash
 cd /workspace/HW2_Work/part3
@@ -273,181 +97,57 @@ python3 test.py \
   --log-position-every 100
 ```
 
-Expected behavior:
-
-- The drone takes off and flies toward the far target around `(10, 0, 1)`.
-- It passes the obstacle region near `x=5` using active sonar.
-- Some runs may terminate as `unsafe_sonar`; the reported Stage 4 result was 8 successes out of 10 episodes.
-
-The test script prints summary metrics and saves a CSV under:
+The script prints summary metrics and saves evaluation CSV files under:
 
 ```text
 HW2_Work/part3/logs/eval/
 ```
 
-### 4. Optional Stage 5 Demonstration
+## Training
 
-Stage 5 is a multi-obstacle extension. Launch:
-
-```bash
-vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
-  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
-```
-
-Then run a Stage 5 model if available:
-
-```bash
-cd /workspace/HW2_Work/part3
-python3 test.py \
-  --stage 5 \
-  --model models/stage5/run006/best/best_precision_model.zip \
-  --success-distance 0.25 \
-  --max-steps 2200 \
-  --episodes 10 \
-  --step-dt 0.05 \
-  --log-position-every 100
-```
-
-If that exact model path is not present, use the best available model under:
+Training uses Stable-Baselines3 PPO with a continuous velocity action:
 
 ```text
-HW2_Work/part3/models/stage5/
+[vx_cmd, vy_cmd, vz_cmd]
 ```
 
-Current reported results:
+Typical settings:
+
+```text
+policy = MlpPolicy
+learning_rate = 0.0003
+n_steps = 512
+batch_size = 64
+gamma = 0.99
+step_dt = 0.05
+device = cpu
+```
+
+Detailed training commands are in [docs/training-design.md](docs/training-design.md) and [docs/commands.md](docs/commands.md).
+
+## Current Results
+
+The final report focuses on Stage 4 because it is the main Task D demonstration.
 
 | Stage | Result |
 | --- | --- |
-| 1A | Fixed altitude, 100% success |
-| 1B | Random altitude, 100% success |
-| 2A | Fixed horizontal target, 100% success |
-| 2B | Random horizontal target, 100% success |
-| 3A | Random combined x/z target, 100% success |
-| 3B | Three sequential targets, 90% success |
-| 4 | One sonar obstacle, 80% success and 20% unsafe sonar |
-| 5 | Multi-obstacle extension in progress |
+| 1A | 100% success |
+| 1B | 100% success |
+| 2A | 100% success |
+| 2B | 100% success |
+| 3A | 100% success |
+| 3B | 90% success |
+| 4 | 80% success, 20% unsafe sonar |
+| 5 | Multi-obstacle extension experiment |
 
-Stage 4 and Stage 5 use saved Gazebo worlds:
+See [REPORT.md](REPORT.md) for the full discussion, failure cases, and comparison with classical control.
+
+## Simulator Notes
+
+The ROS/Gazebo simulator is based on the original NSYSU drone package. For the full original Docker, VNC, topic, plugin, native install, and troubleshooting instructions, read:
 
 ```text
-nsysu_drone_description/worlds/stage4_obstacle.world
-nsysu_drone_description/worlds/stage5_obstacle.world
+docs/Original-README.md
 ```
 
-Launch Stage 5 before optional evaluation:
-
-```bash
-vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
-  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
-```
-
-Use the `test.py` commands above to load a trained model and demonstrate behavior. `train.py` and `test.py` do not load world files. They use whichever Gazebo world is already running.
-
-
-
-# Configure plugin
-
-The `plugin_drone` plugin accepts the following parameters. Edit them in the appropriate YAML under `nsysu_drone_bringup/config/` and rebuild the workspace.
-
-```yaml
-# ROS namespace. All topics and tf frames are prefixed with this.
-namespace: /simple_drone
-
-# Roll/pitch PID
-rollpitchProportionalGain: 10.0
-rollpitchDifferentialGain: 5.0
-rollpitchLimit: 0.5
-
-# Yaw PID
-yawProportionalGain: 2.0
-yawDifferentialGain: 1.0
-yawLimit: 1.5
-
-# Horizontal velocity PID
-velocityXYProportionalGain: 5.0
-velocityXYDifferentialGain: 2.3
-velocityXYLimit: 2
-
-# Vertical velocity PID
-velocityZProportionalGain: 5.0
-velocityZIntegralGain: 0.0
-velocityZDifferentialGain: 1.0
-velocityZLimit: -1
-
-# Horizontal position PID
-positionXYProportionalGain: 1.1
-positionXYDifferentialGain: 0.0
-positionXYIntegralGain: 0.0
-positionXYLimit: 5
-
-# Vertical position PID
-positionZProportionalGain: 1.0
-positionZDifferentialGain: 0.2
-positionZIntegralGain: 0.0
-positionZLimit: -1
-
-# Physical limits / noise
-maxForce: 30
-motionSmallNoise: 0.00
-motionDriftNoise: 0.00
-motionDriftNoiseTime: 50
-```
-
-# Native (non-Docker) install
-
-If you prefer to run directly on the host:
-
-```bash
-mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
-git clone <your-repo-url> nsysu_drone
-cd ~/ros2_ws
-rosdep install -r -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
-colcon build --packages-select-regex nsysu.*
-source install/setup.bash
-ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py
-```
-
-Make sure the common Gazebo models are installed — see [`nsysu_drone_description/README.md`](./nsysu_drone_description/README.md).
-
-# Troubleshooting
-
-### `cannot open display` / `GLX` errors
-Launching GUI apps without `vglrun` will fail because the container has no real display server for OpenGL. Always use the `launch_drone` alias or prefix commands with `vglrun`.
-
-### `[VGL] ERROR: Could not open display :0.`
-VirtualGL is trying to use an X server that doesn't exist. Make sure `VGL_DISPLAY=egl` is set (the Dockerfile adds this to `/root/.bashrc`, so it's automatic in interactive shells).
-
-### `Unable to start server [bind: Address already in use]`
-A previous Gazebo process didn't shut down cleanly. Run:
-```bash
-pkill -9 gzserver gzclient rviz2
-```
-then retry.
-
-### Gazebo runs but feels slow / stutters
-Check that hardware acceleration is actually engaged:
-```bash
-vglrun glxinfo | grep "OpenGL renderer"
-```
-Expected: `NVIDIA RTX A6000/…` (or your GPU).
-If you see `llvmpipe`, EGL is not active — verify `VGL_DISPLAY=egl` and that the container was launched with `--gpus`.
-
-### `colcon build` fails with missing dependencies
-Usually caused by a stale `rosdep` cache. Inside the container:
-```bash
-rosdep update
-rosdep install --from-paths /ros2_ws/src --ignore-src -r -y
-```
-
-### Black screen on VNC connect
-The XFCE session may have crashed. In the container's shell:
-```bash
-export DISPLAY=:1
-dbus-launch xfce4-session &
-```
-
-# References
-- Upstream ancestor: [tum_simulator](http://wiki.ros.org/tum_simulator)
-- VirtualGL: <https://virtualgl.org/>
-- TurboVNC: <https://turbovnc.org/>
-- NVIDIA Container Toolkit: <https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/>
+The most important runtime detail is that GUI ROS commands should use `vglrun` inside the Docker/VNC environment so Gazebo and RViz use GPU rendering.
