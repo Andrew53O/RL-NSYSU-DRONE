@@ -434,6 +434,8 @@ class DroneCurriculumEnv(gym.Env):
     @property
     def current_target(self) -> np.ndarray:
         if self.stage == 4:
+            # Stage 4 trains on a moving local subgoal while success is checked
+            # against the far mission goal. This keeps the target vector local.
             return self._stage4_local_target()
         return self.targets[self.target_index]
 
@@ -481,9 +483,13 @@ class DroneCurriculumEnv(gym.Env):
     def step(self, action: np.ndarray):
         action = np.asarray(action, dtype=np.float32)
         action = np.clip(action, self.action_space.low, self.action_space.high)
+        # The safety filter only blocks clearly unsafe commands. The policy is
+        # still penalized when the filter intervenes, so it learns avoidance.
         filtered_action, was_filtered = self._apply_safety_filter(action)
         self.last_action_was_filtered = was_filtered
+
         self.ros.publish_velocity(filtered_action)
+
         self._spin_for_step()
         self.step_count += 1
 
@@ -502,21 +508,28 @@ class DroneCurriculumEnv(gym.Env):
         velocity_norm = float(np.linalg.norm(self.ros.velocity))
 
         reward = 0.0
+        # Dense progress reward: positive when the active target gets closer.
         if self.previous_distance is not None and math.isfinite(distance):
             scale = 10.0 if distance >= 0.5 else 18.0
             reward += scale * (self.previous_distance - distance)
         self.previous_distance = distance
 
+        # Stage 4 uses a local target, so also reward progress toward the final
+        # long-range goal to prevent the drone from hovering around subgoals.
         if self.stage == 4 and self.previous_final_distance is not None:
             reward += 8.0 * (self.previous_final_distance - mission_goal_distance)
         self.previous_final_distance = mission_goal_distance
 
+        # Axis-specific shaping matches the current curriculum focus, e.g.
+        # vertical accuracy matters most in Stage 1.
         current_abs_error = np.array([x_error, y_error, z_error], dtype=np.float32)
         if self.previous_abs_error is not None:
             delta = self.previous_abs_error - current_abs_error
             reward += self._axis_progress_reward(delta)
         self.previous_abs_error = current_abs_error.copy()
 
+        # Small penalties discourage drifting, overspeed near the target, and
+        # sharp action changes that make Gazebo control unstable.
         reward -= 0.05 * distance
         reward -= self._stage_precision_penalty(x_error, y_error, z_error)
         if distance < 0.6:
@@ -532,6 +545,7 @@ class DroneCurriculumEnv(gym.Env):
         obstacle_mean_risk = float(info["obstacle_mean_risk"])
         min_obstacle = float(info["min_obstacle_sonar_range"])
         if self.sonar_enabled:
+            # Sonar risk is zero in free space and approaches one near obstacles.
             reward -= 2.0 * obstacle_mean_risk**2
             reward -= 4.0 * obstacle_max_risk**2
             if self.stage == 4 and obstacle_max_risk > 0.2 and abs(float(info["vx"])) < 0.05:
@@ -563,6 +577,8 @@ class DroneCurriculumEnv(gym.Env):
                 terminated = True
                 status = "success"
             else:
+                # Move to the next waypoint and reset progress baselines so the
+                # next step is not punished for the target suddenly changing.
                 reward += 30.0
                 self.target_index += 1
                 self.previous_distance = None
@@ -600,6 +616,8 @@ class DroneCurriculumEnv(gym.Env):
         if self.ros.pose is None:
             local_x = min(STAGE4_LOCAL_GOAL_STEP, float(mission_goal[0]))
             return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
+        # The local target advances one meter ahead of the drone in x. Sonar,
+        # not a preplanned path, decides whether the drone shifts sideways/up.
         local_x = min(float(self.ros.pose[0]) + STAGE4_LOCAL_GOAL_STEP, float(mission_goal[0]))
         return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
 
@@ -693,10 +711,13 @@ class DroneCurriculumEnv(gym.Env):
         total_targets = max(len(self.targets), 1)
         target_progress = self.target_index / max(total_targets - 1, 1)
         if self.stage == 4 and pose is not None and math.isfinite(float(pose[0])):
+            # Obstacle stages use forward course progress instead of waypoint
+            # index progress because the active target is a moving local subgoal.
             target_progress = float(np.clip(pose[0] / max(float(self.mission_goal[0]), 0.1), 0.0, 1.0))
         dx_norm = 10.0 if self.stage >= 4 else 3.0
         dy_norm = 5.0 if self.stage >= 4 else 3.0
         distance_norm = 12.0 if self.stage >= 4 else 4.0
+        # Keep this layout synchronized with OBSERVATION_DIM and RL-DESIGN.md.
         obs = np.concatenate(
             [
                 np.array(
@@ -792,10 +813,13 @@ class DroneCurriculumEnv(gym.Env):
         filtered = action.copy()
         sonar = self._safe_sonar_ranges()
         was_filtered = False
+        # If something is very close in the front fan, stop moving forward and
+        # add a small climb command to avoid immediate collision.
         if float(np.min(sonar[:5])) < 0.45:
             filtered[0] = min(filtered[0], 0.0)
             filtered[2] = max(filtered[2], 0.1)
             was_filtered = True
+        # Side sonars push the drone away from nearby lateral obstacles.
         if float(sonar[5]) < 0.45:
             filtered[1] = min(filtered[1], -0.2)
             was_filtered = True
