@@ -66,7 +66,7 @@ def infer_run(model_path: Path) -> tuple[str, str, str]:
 def next_eval_path(model_path: Path, stage: int, variant: str) -> Path:
     model_stage, model_variant, model_run = infer_run(model_path)
     stage_name = f"stage{stage}" if model_stage == "stage_unknown" else model_stage
-    variant_name = f"variant{variant}" if stage <= 4 else model_variant
+    variant_name = f"variant{variant}" if stage <= 5 else model_variant
     eval_dir = LOG_DIR / "eval" / stage_name / variant_name / model_run
     index = 1
     while True:
@@ -127,6 +127,10 @@ def run_episode(env: DroneCurriculumEnv, model: PPO, max_steps: int) -> dict[str
         "mission_goal_y": float(info.get("mission_goal_y", 0.0)),
         "mission_goal_z": float(info.get("mission_goal_z", 0.0)),
         "mission_goal_distance": float(info.get("mission_goal_distance", info["distance_to_target"])),
+        "generated_obstacle_count": int(info.get("generated_obstacle_count", 0)),
+        "generated_obstacle_x": float(info.get("generated_obstacle_x", float("nan"))),
+        "generated_obstacle_y": float(info.get("generated_obstacle_y", float("nan"))),
+        "generated_obstacle_z": float(info.get("generated_obstacle_z", float("nan"))),
         "episode_return": total_reward,
         "steps": steps,
         "targets_reached": targets_reached,
@@ -157,6 +161,10 @@ def write_csv(path: Path, rows: list[dict[str, float | int | str]]) -> None:
         "mission_goal_y",
         "mission_goal_z",
         "mission_goal_distance",
+        "generated_obstacle_count",
+        "generated_obstacle_x",
+        "generated_obstacle_y",
+        "generated_obstacle_z",
         "episode_return",
         "steps",
         "targets_reached",

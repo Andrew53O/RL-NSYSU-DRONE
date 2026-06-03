@@ -44,8 +44,11 @@ SONAR_SECTORS = (
 SONAR_COUNT = len(SONAR_SECTORS)
 OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part4_rl_target_marker"
+GENERATED_OBSTACLE_NAME = "part4_generated_obstacle"
 LONG_MISSION_FINAL_GOAL = np.array([10.0, 0.0, 1.0], dtype=np.float32)
 LONG_MISSION_LOCAL_GOAL_STEP = 1.0
+GENERATED_OBSTACLE_RADIUS = 0.35
+GENERATED_OBSTACLE_HEIGHT = 2.0
 TARGET_MARKER_COLORS = (
     (0.0, 1.0, 0.1, 1.0),  # first target: green
     (0.0, 0.25, 1.0, 1.0),  # second target: blue
@@ -70,6 +73,25 @@ TARGET_MARKER_SDF_TEMPLATE = """
   </model>
 </sdf>
 """
+OBSTACLE_SDF_TEMPLATE = """
+<sdf version="1.6">
+  <model name="{name}">
+    <static>true</static>
+    <link name="obstacle_link">
+      <collision name="obstacle_collision">
+        <geometry><cylinder><radius>{radius:.3f}</radius><length>{height:.3f}</length></cylinder></geometry>
+      </collision>
+      <visual name="obstacle_visual">
+        <geometry><cylinder><radius>{radius:.3f}</radius><length>{height:.3f}</length></cylinder></geometry>
+        <material>
+          <ambient>0.85 0.18 0.08 1.0</ambient>
+          <diffuse>0.85 0.18 0.08 1.0</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
+"""
 
 
 def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> str:
@@ -87,6 +109,14 @@ def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> st
     )
 
 
+def obstacle_sdf(name: str) -> str:
+    return OBSTACLE_SDF_TEMPLATE.format(
+        name=name,
+        radius=GENERATED_OBSTACLE_RADIUS,
+        height=GENERATED_OBSTACLE_HEIGHT,
+    )
+
+
 @dataclass(frozen=True)
 class StageSpec:
     name: str
@@ -97,6 +127,7 @@ class StageSpec:
     z_bounds: tuple[float, float] | None = None
     sequence_count: int = 1
     sonar_enabled: bool = False
+    generated_obstacle_count: int = 0
     focus: str = "navigation"
 
 
@@ -166,6 +197,16 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         sonar_enabled=True,
         focus="obstacle",
     ),
+    (5, "B"): StageSpec(
+        name="stage5B_random_goal_generated_obstacle",
+        description="one generated obstacle on the path to a random long mission goal",
+        fixed_targets=((10.0, 0.0, 1.0),),
+        x_bounds=(5.0, 10.0),
+        y_bounds=(-1.0, 1.0),
+        sonar_enabled=True,
+        generated_obstacle_count=1,
+        focus="obstacle",
+    ),
     (6, "A"): StageSpec(
         name="stage6_multi_obstacle",
         description="long-goal multi-obstacle sonar avoidance",
@@ -178,7 +219,11 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
 
 def normalize_variant(stage: int, variant: str) -> str:
     variant = variant.upper()
-    if stage >= 5:
+    if stage == 5:
+        if variant not in ("A", "B"):
+            raise ValueError("variant must be A or B")
+        return variant
+    if stage >= 6:
         return "A"
     if variant not in ("A", "B"):
         raise ValueError("variant must be A or B")
@@ -214,6 +259,7 @@ class DroneRosBridge(Node):
         self.target_marker_enabled = SpawnEntity is not None and DeleteEntity is not None
         self.target_marker_spawned = False
         self.target_marker_names: set[str] = set()
+        self.generated_obstacle_names: set[str] = set()
         self.target_marker_warning_logged = False
         self.reset_world_warning_logged = False
 
@@ -320,7 +366,7 @@ class DroneRosBridge(Node):
             return TARGET_MARKER_NAME
         return f"{TARGET_MARKER_NAME}_{index + 1}"
 
-    def _delete_target_marker(self, name: str) -> None:
+    def _delete_entity(self, name: str) -> None:
         if not self.target_marker_enabled:
             return
         if not self.delete_entity_client.wait_for_service(timeout_sec=0.2):
@@ -338,7 +384,7 @@ class DroneRosBridge(Node):
         for index in range(4):
             names.add(self._target_marker_name(index, 4))
         for name in sorted(names):
-            self._delete_target_marker(name)
+            self._delete_entity(name)
         self.target_marker_names.clear()
         self.target_marker_spawned = False
 
@@ -370,6 +416,43 @@ class DroneRosBridge(Node):
 
     def update_target_marker(self, target: np.ndarray) -> None:
         self.update_target_markers(np.array([target], dtype=np.float32))
+
+    def clear_generated_obstacles(self) -> None:
+        if not self.target_marker_enabled:
+            return
+        names = set(self.generated_obstacle_names)
+        names.add(GENERATED_OBSTACLE_NAME)
+        for index in range(4):
+            names.add(f"{GENERATED_OBSTACLE_NAME}_{index + 1}")
+        for name in sorted(names):
+            self._delete_entity(name)
+        self.generated_obstacle_names.clear()
+
+    def update_generated_obstacles(self, obstacles: np.ndarray) -> None:
+        if not self.target_marker_enabled:
+            return
+        if not self.spawn_entity_client.wait_for_service(timeout_sec=0.2):
+            return
+        self.clear_generated_obstacles()
+        obstacle_count = len(obstacles)
+        for index, obstacle in enumerate(obstacles):
+            obstacle_name = (
+                GENERATED_OBSTACLE_NAME
+                if obstacle_count == 1
+                else f"{GENERATED_OBSTACLE_NAME}_{index + 1}"
+            )
+            req = SpawnEntity.Request()
+            req.name = obstacle_name
+            req.xml = obstacle_sdf(obstacle_name)
+            req.reference_frame = "world"
+            req.initial_pose.position.x = float(obstacle[0])
+            req.initial_pose.position.y = float(obstacle[1])
+            req.initial_pose.position.z = float(obstacle[2])
+            req.initial_pose.orientation.w = 1.0
+            future = self.spawn_entity_client.call_async(req)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=0.8)
+            if future.done() and future.result() is not None:
+                self.generated_obstacle_names.add(obstacle_name)
 
 
 class DroneCurriculumEnv(gym.Env):
@@ -424,6 +507,7 @@ class DroneCurriculumEnv(gym.Env):
         self.last_info: dict[str, Any] = {}
         self.last_action_was_filtered = False
         self.targets_reached = 0
+        self.generated_obstacles = np.zeros((0, 3), dtype=np.float32)
 
         self.action_space = spaces.Box(
             low=np.array([-1.0, -1.0, -0.5], dtype=np.float32),
@@ -459,6 +543,8 @@ class DroneCurriculumEnv(gym.Env):
         if options and "target" in options:
             self.target_override = tuple(float(v) for v in options["target"])
         self.targets = self._sample_targets()
+        self.generated_obstacles = np.zeros((0, 3), dtype=np.float32)
+        self.ros.clear_generated_obstacles()
         self.target_index = 0
         self.targets_reached = 0
         self.step_count = 0
@@ -479,6 +565,8 @@ class DroneCurriculumEnv(gym.Env):
         if not takeoff_ok or self.ros.pose is None:
             raise RuntimeError("Part 4 reset/takeoff failed; restart Gazebo and try again.")
 
+        self.generated_obstacles = self._sample_generated_obstacles()
+        self.ros.update_generated_obstacles(self.generated_obstacles)
         obs = self._get_obs()
         self._update_stage_markers(force=True)
         self.previous_distance = float(self.last_info["distance_to_target"])
@@ -589,6 +677,7 @@ class DroneCurriculumEnv(gym.Env):
         return obs, float(reward), terminated, truncated, self._info(status)
 
     def close(self) -> None:
+        self.ros.clear_generated_obstacles()
         self.ros.stop()
         self.ros.destroy_node()
         if self._owns_rclpy and rclpy.ok():
@@ -598,6 +687,8 @@ class DroneCurriculumEnv(gym.Env):
         if self.target_override is not None:
             return np.array([self.target_override], dtype=np.float32)
         if self.stage in (5, 6):
+            if self.stage_spec.x_bounds is not None or self.stage_spec.y_bounds is not None:
+                return np.array([self._sample_one_target(0)], dtype=np.float32)
             return np.array([LONG_MISSION_FINAL_GOAL], dtype=np.float32)
         if self.stage_spec.sequence_count > 1:
             targets = [self._sample_one_target(index) for index in range(self.stage_spec.sequence_count)]
@@ -607,10 +698,37 @@ class DroneCurriculumEnv(gym.Env):
     def _long_mission_local_target(self) -> np.ndarray:
         mission_goal = self.mission_goal
         if self.ros.pose is None:
-            local_x = min(LONG_MISSION_LOCAL_GOAL_STEP, float(mission_goal[0]))
-            return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
-        local_x = min(float(self.ros.pose[0]) + LONG_MISSION_LOCAL_GOAL_STEP, float(mission_goal[0]))
-        return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
+            start = np.zeros(3, dtype=np.float32)
+            delta = mission_goal - start
+        else:
+            start = self.ros.pose.astype(np.float32)
+            delta = mission_goal - start
+        distance = float(np.linalg.norm(delta))
+        if not math.isfinite(distance) or distance <= LONG_MISSION_LOCAL_GOAL_STEP:
+            return mission_goal.astype(np.float32)
+        direction = delta / distance
+        return (start + LONG_MISSION_LOCAL_GOAL_STEP * direction).astype(np.float32)
+
+    def _sample_generated_obstacles(self) -> np.ndarray:
+        if self.stage_spec.generated_obstacle_count <= 0 or self.ros.pose is None:
+            return np.zeros((0, 3), dtype=np.float32)
+        start = self.ros.pose.astype(np.float32)
+        goal = self.mission_goal.astype(np.float32)
+        delta = goal - start
+        distance = float(np.linalg.norm(delta[:2]))
+        if not math.isfinite(distance) or distance <= 1.0:
+            return np.zeros((0, 3), dtype=np.float32)
+        obstacles: list[np.ndarray] = []
+        for _ in range(self.stage_spec.generated_obstacle_count):
+            fraction = random.uniform(0.42, 0.68)
+            xy = start[:2] + fraction * delta[:2]
+            obstacles.append(
+                np.array(
+                    [xy[0], xy[1], GENERATED_OBSTACLE_HEIGHT / 2.0],
+                    dtype=np.float32,
+                )
+            )
+        return np.array(obstacles, dtype=np.float32)
 
     def _update_stage_markers(self, force: bool = False) -> None:
         if not force:
@@ -708,7 +826,10 @@ class DroneCurriculumEnv(gym.Env):
         total_targets = max(len(self.targets), 1)
         target_progress = self.target_index / max(total_targets - 1, 1)
         if self.stage in (5, 6) and pose is not None and math.isfinite(float(pose[0])):
-            target_progress = float(np.clip(pose[0] / max(float(self.mission_goal[0]), 0.1), 0.0, 1.0))
+            mission_vector = self.mission_goal.astype(np.float32)
+            mission_length_sq = float(np.dot(mission_vector, mission_vector))
+            if mission_length_sq > 1e-6:
+                target_progress = float(np.clip(np.dot(pose, mission_vector) / mission_length_sq, 0.0, 1.0))
         dx_norm = 10.0 if self.stage >= 5 else 3.0
         dy_norm = 5.0 if self.stage >= 5 else 3.0
         distance_norm = 12.0 if self.stage >= 5 else 4.0
@@ -768,6 +889,16 @@ class DroneCurriculumEnv(gym.Env):
             "obstacle_max_risk": float(np.max(sonar_risk)),
             "side_sonar_left": float(sonar[5]),
             "side_sonar_right": float(sonar[6]),
+            "generated_obstacle_count": int(len(self.generated_obstacles)),
+            "generated_obstacle_x": (
+                float(self.generated_obstacles[0][0]) if len(self.generated_obstacles) else math.nan
+            ),
+            "generated_obstacle_y": (
+                float(self.generated_obstacles[0][1]) if len(self.generated_obstacles) else math.nan
+            ),
+            "generated_obstacle_z": (
+                float(self.generated_obstacles[0][2]) if len(self.generated_obstacles) else math.nan
+            ),
         }
         self.previous_sonar = sonar
         return obs

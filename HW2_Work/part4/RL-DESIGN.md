@@ -438,6 +438,7 @@ Part 4 uses six learning stages:
 | 4 | A | Random x/y/z navigation | random x, y, z | Masked |
 | 4 | B | Sequential x/y/z targets | 3 random targets | Masked |
 | 5 | A | Single-obstacle sonar avoidance | final goal `(10, 0, 1)` | Active |
+| 5 | B | Random-goal single-obstacle sonar avoidance | random goal, generated obstacle on path | Active |
 | 6 | A | Multi-obstacle sonar avoidance | final goal `(10, 0, 1)` | Active |
 
 The curriculum is designed as divide and conquer:
@@ -453,27 +454,37 @@ This is easier than training obstacle avoidance from scratch. If the drone fails
 
 ## Dynamic Local Subgoal in Obstacle Stages
 
-Stages 5 and 6 use a far final goal:
+Stages 5 and 6 use a far final goal. Stage 5A and Stage 6A use:
 
 ```text
 (10.0, 0.0, 1.0)
 ```
 
+Stage 5B randomizes the final goal:
+
+```text
+x in [5.0, 10.0]
+y in [-1.0, 1.0]
+z = 1.0
+```
+
 Training directly on a 10-meter target is difficult because the reward becomes sparse and the drone may not know how to make steady forward progress. To solve this, the environment creates a dynamic local subgoal:
 
 ```text
-local_x = min(current_x + 1.0, 10.0)
-local_y = 0.0
-local_z = 1.0
+direction = final_goal - current_position
+distance = norm(direction)
+
+if distance <= 1.0:
+    local_subgoal = final_goal
+else:
+    local_subgoal = current_position + 1.0 * direction / distance
 ```
 
-This means the active target is always a short forward step instead of the full 10-meter goal. For example, if the drone is currently at `x = 3.2`, the local subgoal is approximately:
+This means the active target is always a short step toward the final goal instead of the full long-distance goal. Unlike the older x-only version, this local subgoal considers x, y, and z together. For example, if the drone is currently at `(3.2, 0.2, 0.8)`, the local subgoal is placed about one meter along the 3D direction from the drone to the final goal.
 
-```text
-(4.2, 0.0, 1.0)
-```
+The final mission goal is still the true success target. The local subgoal only gives PPO an easier immediate navigation target. The reward still includes final-goal progress, so the drone cannot succeed by only hovering near short subgoals.
 
-The final mission goal is still `(10.0, 0.0, 1.0)`. The local subgoal only gives PPO an easier immediate navigation target. The reward still includes final-goal progress, so the drone cannot succeed by only hovering near short subgoals.
+In Stage 5B, the environment also generates one cylinder obstacle on the straight line between the takeoff position and the randomized final goal. This creates a repeatable "one obstacle blocks the obvious path" task without manually editing the Gazebo world for every random target.
 
 This local subgoal is not a preplanned obstacle-avoidance path. It does not tell the drone to climb or move sideways around cones. It only says, "continue roughly forward." The sonar reward and sonar observations decide when the drone should move sideways or upward.
 

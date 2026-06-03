@@ -266,7 +266,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def run_root(base: Path, stage: int, variant: str) -> Path:
-    if stage <= 4:
+    if stage <= 5:
         return base / f"stage{stage}" / f"variant{variant}"
     return base / f"stage{stage}"
 

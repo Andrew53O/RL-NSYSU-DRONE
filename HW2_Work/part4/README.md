@@ -38,11 +38,12 @@ sonar for obstacle avoidance.
 | 4 | A | Random x/y/z navigation | random single target | masked |
 | 4 | B | Sequential x/y/z navigation | 3 random targets | masked |
 | 5 | A | One-obstacle avoidance | mission goal `(10, 0, 1)` | active |
+| 5 | B | Random-goal one-obstacle avoidance | random x/y goal, generated obstacle | active |
 | 6 | A | Multi-obstacle avoidance | mission goal `(10, 0, 1)` | active |
 
-Stages 5 and 6 use an internal dynamic local subgoal about `1 m` ahead in `x`.
-The local subgoal only encourages forward progress. It is not a fixed avoidance
-trajectory; sideways or vertical avoidance should come from sonar risk.
+Stages 5 and 6 use an internal dynamic local subgoal about `1 m` toward the
+final goal in 3D. It is not a fixed avoidance trajectory; sideways or vertical
+avoidance should come from sonar risk.
 
 ## Syntax Check
 
@@ -287,6 +288,7 @@ Stage 5 train:
 ```bash
 python3 train.py \
   --stage 5 \
+  --variant A \
   --resume-from models/stage4/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.20 \
   --max-steps 1800 \
@@ -304,12 +306,28 @@ Stage 5 test:
 ```bash
 python3 test.py \
   --stage 5 \
-  --model models/stage5/run001/best/best_precision_model.zip \
+  --variant A \
+  --model models/stage5/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.20 \
   --max-steps 1800 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 100
+```
+
+Stage 5B uses one generated cylinder obstacle on the straight line to a random
+mission goal with `x in [5, 10]`, `y in [-1, 1]`, and `z = 1`.
+
+```bash
+python3 train.py \
+  --stage 5 \
+  --variant B \
+  --resume-from models/stage5/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.20 \
+  --max-steps 1800 \
+  --timesteps 120000 \
+  --step-dt 0.05 \
+  --log-position-every 50
 ```
 
 ### Stage 6: Multi-Obstacle Sonar Avoidance
