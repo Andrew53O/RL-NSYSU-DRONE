@@ -53,9 +53,9 @@ python3 -m py_compile drone_env.py train.py test.py
 
 ## Training Commands
 
-Use `--success-distance 0.15` for Stages 1-4. These stages are basic
+Use `--success-distance 0.10` for Stages 1-4. These stages are basic
 navigation lessons, so the drone should learn fairly precise target reaching.
-Use `--success-distance 0.25` for Stages 5-6 because the far obstacle mission is
+Use `--success-distance 0.20` for Stages 5-6 because the far obstacle mission is
 longer and the avoidance path can naturally finish with more lateral error.
 
 Stage 1A:
@@ -64,7 +64,7 @@ Stage 1A:
 python3 train.py \
   --stage 1 \
   --variant A \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 30000 \
   --step-dt 0.05
 ```
@@ -76,7 +76,7 @@ python3 train.py \
   --stage 1 \
   --variant B \
   --resume-from models/stage1/variantA/run002/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -88,7 +88,7 @@ python3 train.py \
   --stage 2 \
   --variant A \
   --resume-from models/stage1/variantB/run001/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -100,7 +100,7 @@ python3 train.py \
   --stage 2 \
   --variant B \
   --resume-from models/stage2/variantA/run001/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -112,7 +112,7 @@ python3 train.py \
   --stage 3 \
   --variant A \
   --resume-from models/stage2/variantB/run001/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 30000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -125,7 +125,7 @@ python3 train.py \
   --stage 3 \
   --variant B \
   --resume-from models/stage3/variantA/run001/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 50000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -138,7 +138,7 @@ python3 train.py \
   --stage 4 \
   --variant A \
   --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 50000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -151,7 +151,7 @@ python3 train.py \
   --stage 4 \
   --variant B \
   --resume-from models/stage4/variantA/run001/best/best_precision_model.zip \
-  --success-distance 0.15 \
+  --success-distance 0.10 \
   --timesteps 80000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -163,7 +163,7 @@ Stage 5, one-obstacle sonar avoidance:
 python3 train.py \
   --stage 5 \
   --resume-from models/stage4/variantB/run001/best/best_precision_model.zip \
-  --success-distance 0.25 \
+  --success-distance 0.20 \
   --max-steps 1800 \
   --timesteps 120000 \
   --step-dt 0.05 \
@@ -180,7 +180,7 @@ Stage 6, multi-obstacle sonar avoidance:
 python3 train.py \
   --stage 6 \
   --resume-from models/stage5/run001/best/best_precision_model.zip \
-  --success-distance 0.25 \
+  --success-distance 0.20 \
   --max-steps 2200 \
   --timesteps 80000 \
   --step-dt 0.05 \
@@ -211,7 +211,7 @@ Test the one-obstacle stage:
 python3 test.py \
   --stage 5 \
   --model models/stage5/run001/best/best_precision_model.zip \
-  --success-distance 0.25 \
+  --success-distance 0.20 \
   --max-steps 1800 \
   --episodes 10 \
   --step-dt 0.05 \
