@@ -34,7 +34,7 @@ sonar for obstacle avoidance.
 | 2 | A | Fixed x movement | `(1, 0, 0.8)` | masked |
 | 2 | B | Random x movement | `x in [-1, 2]` | masked |
 | 3 | A | Fixed y movement | `(0, 1, 0.8)` | masked |
-| 3 | B | Random y movement | `y in [-1.5, 1.5]` | masked |
+| 3 | B | Random y movement | `y in [-1.0, 1.0]` | masked |
 | 4 | A | Random x/y/z navigation | random single target | masked |
 | 4 | B | Sequential x/y/z navigation | 3 random targets | masked |
 | 5 | A | One-obstacle avoidance | mission goal `(10, 0, 1)` | active |
