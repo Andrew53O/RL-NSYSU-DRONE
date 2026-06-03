@@ -51,14 +51,20 @@ cd /workspace/HW2_Work/part4
 python3 -m py_compile drone_env.py train.py test.py
 ```
 
-## Training Commands
+## Train And Test Commands
 
 Use `--success-distance 0.10` for Stages 1-4. These stages are basic
 navigation lessons, so the drone should learn fairly precise target reaching.
 Use `--success-distance 0.20` for Stages 5-6 because the far obstacle mission is
 longer and the avoidance path can naturally finish with more lateral error.
 
-Stage 1A:
+Run the stages in order. If you retrain a stage and the run number changes,
+replace `run001` or `run002` in the next command with your newest successful
+run.
+
+### Stage 1: Altitude Control
+
+Stage 1A train:
 
 ```bash
 python3 train.py \
@@ -69,7 +75,20 @@ python3 train.py \
   --step-dt 0.05
 ```
 
-Stage 1B:
+Stage 1A test:
+
+```bash
+python3 test.py \
+  --stage 1 \
+  --variant A \
+  --model models/stage1/variantA/run002/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 1B train:
 
 ```bash
 python3 train.py \
@@ -81,7 +100,22 @@ python3 train.py \
   --step-dt 0.05
 ```
 
-Stage 2A:
+Stage 1B test:
+
+```bash
+python3 test.py \
+  --stage 1 \
+  --variant B \
+  --model models/stage1/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+### Stage 2: X-Axis Movement
+
+Stage 2A train:
 
 ```bash
 python3 train.py \
@@ -93,7 +127,20 @@ python3 train.py \
   --step-dt 0.05
 ```
 
-Stage 2B:
+Stage 2A test:
+
+```bash
+python3 test.py \
+  --stage 2 \
+  --variant A \
+  --model models/stage2/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 2B train:
 
 ```bash
 python3 train.py \
@@ -105,7 +152,22 @@ python3 train.py \
   --step-dt 0.05
 ```
 
-Stage 3A, new fixed y-axis stage:
+Stage 2B test:
+
+```bash
+python3 test.py \
+  --stage 2 \
+  --variant B \
+  --model models/stage2/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+### Stage 3: Y-Axis Movement
+
+Stage 3A train:
 
 ```bash
 python3 train.py \
@@ -118,7 +180,20 @@ python3 train.py \
   --early-stop-plateau
 ```
 
-Stage 3B, new random y-axis stage:
+Stage 3A test:
+
+```bash
+python3 test.py \
+  --stage 3 \
+  --variant A \
+  --model models/stage3/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 3B train:
 
 ```bash
 python3 train.py \
@@ -131,7 +206,22 @@ python3 train.py \
   --early-stop-plateau
 ```
 
-Stage 4A, random x/y/z:
+Stage 3B test:
+
+```bash
+python3 test.py \
+  --stage 3 \
+  --variant B \
+  --model models/stage3/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+### Stage 4: Combined X/Y/Z Navigation
+
+Stage 4A train:
 
 ```bash
 python3 train.py \
@@ -144,7 +234,20 @@ python3 train.py \
   --early-stop-plateau
 ```
 
-Stage 4B, sequential x/y/z:
+Stage 4A test:
+
+```bash
+python3 test.py \
+  --stage 4 \
+  --variant A \
+  --model models/stage4/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 4B train:
 
 ```bash
 python3 train.py \
@@ -157,7 +260,29 @@ python3 train.py \
   --early-stop-plateau
 ```
 
-Stage 5, one-obstacle sonar avoidance:
+Stage 4B test:
+
+```bash
+python3 test.py \
+  --stage 4 \
+  --variant B \
+  --model models/stage4/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+### Stage 5: One-Obstacle Sonar Avoidance
+
+Launch the Stage 5 world first:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
+```
+
+Stage 5 train:
 
 ```bash
 python3 train.py \
@@ -174,7 +299,29 @@ python3 train.py \
   --plateau-min-delta 1.0
 ```
 
-Stage 6, multi-obstacle sonar avoidance:
+Stage 5 test:
+
+```bash
+python3 test.py \
+  --stage 5 \
+  --model models/stage5/run001/best/best_precision_model.zip \
+  --success-distance 0.20 \
+  --max-steps 1800 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 100
+```
+
+### Stage 6: Multi-Obstacle Sonar Avoidance
+
+Launch the Stage 6 world first:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
+```
+
+Stage 6 train:
 
 ```bash
 python3 train.py \
@@ -191,28 +338,14 @@ python3 train.py \
   --plateau-min-delta 0.5
 ```
 
-## Evaluation Examples
-
-Test the new y-axis stage:
+Stage 6 test:
 
 ```bash
 python3 test.py \
-  --stage 3 \
-  --variant B \
-  --model models/stage3/variantB/run001/best/best_precision_model.zip \
-  --episodes 10 \
-  --step-dt 0.05 \
-  --log-position-every 25
-```
-
-Test the one-obstacle stage:
-
-```bash
-python3 test.py \
-  --stage 5 \
-  --model models/stage5/run001/best/best_precision_model.zip \
+  --stage 6 \
+  --model models/stage6/run001/best/best_precision_model.zip \
   --success-distance 0.20 \
-  --max-steps 1800 \
+  --max-steps 2200 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 100
