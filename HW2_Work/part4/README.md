@@ -53,10 +53,20 @@ python3 -m py_compile drone_env.py train.py test.py
 
 ## Training Commands
 
+Use `--success-distance 0.15` for Stages 1-4. These stages are basic
+navigation lessons, so the drone should learn fairly precise target reaching.
+Use `--success-distance 0.25` for Stages 5-6 because the far obstacle mission is
+longer and the avoidance path can naturally finish with more lateral error.
+
 Stage 1A:
 
 ```bash
-python3 train.py --stage 1 --variant A --timesteps 30000 --step-dt 0.05
+python3 train.py \
+  --stage 1 \
+  --variant A \
+  --success-distance 0.15 \
+  --timesteps 30000 \
+  --step-dt 0.05
 ```
 
 Stage 1B:
@@ -66,6 +76,7 @@ python3 train.py \
   --stage 1 \
   --variant B \
   --resume-from models/stage1/variantA/run002/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -77,6 +88,7 @@ python3 train.py \
   --stage 2 \
   --variant A \
   --resume-from models/stage1/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -88,6 +100,7 @@ python3 train.py \
   --stage 2 \
   --variant B \
   --resume-from models/stage2/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -99,6 +112,7 @@ python3 train.py \
   --stage 3 \
   --variant A \
   --resume-from models/stage2/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 30000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -111,6 +125,7 @@ python3 train.py \
   --stage 3 \
   --variant B \
   --resume-from models/stage3/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 50000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -123,6 +138,7 @@ python3 train.py \
   --stage 4 \
   --variant A \
   --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 50000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -135,6 +151,7 @@ python3 train.py \
   --stage 4 \
   --variant B \
   --resume-from models/stage4/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.15 \
   --timesteps 80000 \
   --step-dt 0.05 \
   --early-stop-plateau
