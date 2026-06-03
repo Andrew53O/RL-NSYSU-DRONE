@@ -65,7 +65,7 @@ Stage 1B:
 python3 train.py \
   --stage 1 \
   --variant B \
-  --resume-from models/stage1/variantA/run001/best/best_precision_model.zip \
+  --resume-from models/stage1/variantA/run002/best/best_precision_model.zip \
   --timesteps 50000 \
   --step-dt 0.05
 ```
