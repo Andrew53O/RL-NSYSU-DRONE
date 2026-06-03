@@ -181,6 +181,57 @@ A continuous action space is better than discrete actions for this task because 
 
 The reward is dense. A sparse reward that only gives points at success is too hard for this task because the drone needs many correct small movements before reaching the target. The reward is built from several parts.
 
+In one compact form, the reward can be written as:
+
+```text
+R =
+  scale * (previous_distance - distance)
++ final_goal_progress
++ dot(axis_weights, previous_abs_error - current_abs_error)
+- 0.05 * distance
+- precision_penalty(x_error, y_error, z_error)
+- 0.01 * norm(filtered_action)
+- 0.02 * norm(filtered_action - previous_action)
+- near_target_braking_penalty
+- sonar_risk_penalty
+- safety_filter_penalty
++ success_bonus
++ intermediate_target_bonus
+- failure_penalty
+- timeout_penalty
+```
+
+Where the optional terms only apply in the correct situation:
+
+```text
+final_goal_progress =
+    8.0 * (previous_final_distance - mission_goal_distance), in Stages 5 and 6
+
+near_target_braking_penalty =
+    0.12 * velocity_norm + 0.08 * norm(filtered_action), if distance < 0.6
+
+sonar_risk_penalty =
+    2.0 * obstacle_mean_risk^2 + 4.0 * obstacle_max_risk^2, if sonar is enabled
+
+safety_filter_penalty =
+    0.25, if the safety filter changes the action
+
+success_bonus =
+    80.0, if the final target is reached
+
+intermediate_target_bonus =
+    30.0, if a non-final target in a sequence is reached
+
+failure_penalty =
+    100.0 for invalid sensor, crash, or unsafe sonar
+    80.0 for out of bounds
+
+timeout_penalty =
+    5.0 + 20.0 * min(distance, 2.0)
+```
+
+This formula is useful for understanding the reward as one signal: the drone is rewarded for getting closer to the target and final mission goal, while being penalized for distance, poor precision, rough motion, obstacle risk, unsafe actions, and failure.
+
 ### Distance Progress Reward
 
 The main reward encourages the drone to reduce distance to the active target:
@@ -415,6 +466,14 @@ local_x = min(current_x + 1.0, 10.0)
 local_y = 0.0
 local_z = 1.0
 ```
+
+This means the active target is always a short forward step instead of the full 10-meter goal. For example, if the drone is currently at `x = 3.2`, the local subgoal is approximately:
+
+```text
+(4.2, 0.0, 1.0)
+```
+
+The final mission goal is still `(10.0, 0.0, 1.0)`. The local subgoal only gives PPO an easier immediate navigation target. The reward still includes final-goal progress, so the drone cannot succeed by only hovering near short subgoals.
 
 This local subgoal is not a preplanned obstacle-avoidance path. It does not tell the drone to climb or move sideways around cones. It only says, "continue roughly forward." The sonar reward and sonar observations decide when the drone should move sideways or upward.
 
