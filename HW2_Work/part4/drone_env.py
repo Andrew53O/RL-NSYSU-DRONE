@@ -619,8 +619,11 @@ class DroneCurriculumEnv(gym.Env):
         if distance < 0.6:
             reward -= 0.12 * velocity_norm
             reward -= 0.08 * float(np.linalg.norm(filtered_action))
-        reward -= 0.01 * float(np.linalg.norm(filtered_action))
-        reward -= 0.02 * float(np.linalg.norm(filtered_action - self.previous_action))
+        action_norm = float(np.linalg.norm(filtered_action))
+        action_delta_norm = float(np.linalg.norm(filtered_action - self.previous_action))
+        reward -= 0.015 * velocity_norm
+        reward -= 0.02 * action_norm
+        reward -= 0.06 * action_delta_norm
         if was_filtered:
             reward -= 0.25
         self.previous_action = filtered_action.copy()

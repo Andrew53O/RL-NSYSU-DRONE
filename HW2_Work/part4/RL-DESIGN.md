@@ -190,8 +190,9 @@ R =
 + dot(axis_weights, previous_abs_error - current_abs_error)
 - 0.05 * distance
 - precision_penalty(x_error, y_error, z_error)
-- 0.01 * norm(filtered_action)
-- 0.02 * norm(filtered_action - previous_action)
+- 0.015 * velocity_norm
+- 0.02 * norm(filtered_action)
+- 0.06 * norm(filtered_action - previous_action)
 - near_target_braking_penalty
 - sonar_risk_penalty
 - safety_filter_penalty
@@ -322,18 +323,19 @@ if distance < 0.6:
 
 This helps reduce overshoot. Without this term, the drone can fly through the target area too fast and miss the success threshold.
 
-### Smoothness Penalties
+### Smoothness and Stability Penalties
 
-The reward includes two smoothness terms:
+The reward includes three smoothness/stability terms:
 
 ```python
-reward -= 0.01 * norm(filtered_action)
-reward -= 0.02 * norm(filtered_action - previous_action)
+reward -= 0.015 * velocity_norm
+reward -= 0.02 * norm(filtered_action)
+reward -= 0.06 * norm(filtered_action - previous_action)
 ```
 
-The first term discourages unnecessarily large commands. The second term discourages sudden changes between actions. This matters because sudden changes in velocity command make the drone tilt and wobble.
+The first term mildly discourages unnecessary high-speed motion throughout the episode. The second term discourages unnecessarily large commands. The third term discourages sudden changes between actions. This matters because sudden changes in velocity command make the drone tilt and wobble.
 
-In practice, this penalty is still fairly small. That means the drone may still look wavy if the policy discovers that aggressive command changes reach the target faster. If smoother flight is more important than raw success rate, this action-change penalty can be increased.
+Compared with the earlier Part 4 reward, the action-change penalty is intentionally stronger. The goal is not to make the drone hover slowly, but to reduce the aggressive left/right/up/down command switching that makes the body attitude look unstable in Gazebo. Because the observation and action dimensions are unchanged, old checkpoints can still be loaded, but they should be fine-tuned with the updated reward if smoother behavior is desired.
 
 ### Sonar Risk Penalty
 
