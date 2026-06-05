@@ -236,7 +236,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timesteps", type=int, default=100_000)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--resume-from", type=Path, default=None)
-    parser.add_argument("--success-distance", type=float, default=0.15)
+    parser.add_argument("--success-distance", type=float, default=0.10)
     parser.add_argument("--max-steps", type=int, default=800)
     parser.add_argument(
         "--step-dt",
@@ -255,8 +255,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Stop when the moving average reward no longer improves.",
     )
-    parser.add_argument("--plateau-window", type=int, default=50)
-    parser.add_argument("--plateau-patience", type=int, default=50)
+    parser.add_argument("--plateau-window", type=int, default=30)
+    parser.add_argument("--plateau-patience", type=int, default=30)
     parser.add_argument("--plateau-min-delta", type=float, default=1.0)
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--overwrite", action="store_true")

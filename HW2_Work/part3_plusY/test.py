@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--variant", choices=("A", "B", "a", "b"), default="A")
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--target", nargs=3, type=float, default=None)
-    parser.add_argument("--success-distance", type=float, default=0.15)
+    parser.add_argument("--success-distance", type=float, default=0.10)
     parser.add_argument("--max-steps", type=int, default=800)
     parser.add_argument(
         "--step-dt",

@@ -108,14 +108,13 @@ Stage 5:
 python3 train.py \
   --stage 5 \
   --resume-from models/stage4/variantB/run001/best/best_precision_model.zip \
-  --success-distance 0.25 \
   --max-steps 1800 \
   --timesteps 120000 \
   --step-dt 0.05 \
   --log-position-every 50 \
   --early-stop-plateau \
-  --plateau-window 50 \
-  --plateau-patience 80 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
   --plateau-min-delta 1.0
 ```
 
