@@ -330,3 +330,49 @@ best/best_average_model.zip
 best/best_success_model.zip
 best/best_precision_model.zip
 ```
+
+## Meaning of Saved Models
+
+Each training run saves one final model and four "best" models. They are all PPO models, but they are selected using different rules.
+
+The final model is:
+
+```text
+ppo_drone.zip
+```
+
+This is the model at the end of training. It is useful if you want to continue training exactly from the last timestep, but it is not always the best model for testing. PPO can improve, then become worse later, so the final model may be weaker than an earlier checkpoint.
+
+The `best/` folder contains:
+
+```text
+best_episode_model.zip
+best_average_model.zip
+best_success_model.zip
+best_precision_model.zip
+best_summary.csv
+```
+
+| File | How it is selected | When to use it |
+| --- | --- | --- |
+| `best_episode_model.zip` | Saved when one episode gets the highest single episode reward so far. | Good for seeing the best lucky/high-reward episode, but it can overfit to one lucky run. |
+| `best_average_model.zip` | Saved when the moving average reward over the recent window improves. | Good for general training stability because it looks at recent performance, not only one episode. |
+| `best_success_model.zip` | Saved when the recent success rate improves. | Good when the most important metric is simply reaching the target. |
+| `best_precision_model.zip` | Saved when the policy improves the precision key: success first, then targets reached, then smaller final distance. | Best default choice for `test.py`, because the homework cares about success and final distance. |
+| `best_summary.csv` | Log file showing which episodes caused each best model to be saved. | Use this to explain why a model was chosen. |
+
+For most evaluation commands in this README, use:
+
+```text
+best/best_precision_model.zip
+```
+
+This is why the testing commands point to `best_precision_model.zip` instead of `ppo_drone.zip`. The precision model is usually the safest model to show to the TA because it is chosen by task success and final target accuracy, not just by reward.
+
+During training, `train.py` also copies the final model to:
+
+```text
+models/stageN/variantX/latest/ppo_drone.zip
+```
+
+That `latest/ppo_drone.zip` is only a convenience copy of the final model. It is not the same as the best precision model.
