@@ -153,6 +153,10 @@ python3 test.py \
 
 ### Stage 2: X-Axis Movement
 
+Stage 2 uses target height `z=0.5`, matching the takeoff height, so this stage
+isolates x-axis movement instead of asking the drone to climb while moving
+forward.
+
 Stage 2A train:
 
 ```bash

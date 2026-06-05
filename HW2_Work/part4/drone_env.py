@@ -148,13 +148,13 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
     (2, "A"): StageSpec(
         name="stage2A_fixed_horizontal",
         description="fixed x target with stable altitude",
-        fixed_targets=((1.0, 0.0, 0.8),),
+        fixed_targets=((1.0, 0.0, 0.5),),
         focus="horizontal",
     ),
     (2, "B"): StageSpec(
         name="stage2B_random_horizontal",
         description="random x target with stable altitude",
-        fixed_targets=((1.0, 0.0, 0.8),),
+        fixed_targets=((1.0, 0.0, 0.5),),
         x_bounds=(-1.0, 2.0),
         focus="horizontal",
     ),
