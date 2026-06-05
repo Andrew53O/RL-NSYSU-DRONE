@@ -37,10 +37,11 @@ Observation stays fixed at 41 values. Sonar fields are present from Stage 1, but
 | 4A | Random x/z navigation | random x/z target | masked |
 | 4B | Sequential navigation | 3 random x/z targets | masked |
 | 5 | One-obstacle avoidance | mission goal `(10, 0, 1)` | active |
-| 6 | Multi-obstacle avoidance | mission goal `(10, 0, 1)` | active |
-| 7 | Sequential obstacle mission | future extension | active |
+| 6 | Planned extension for sequential targets plus obstacles | future extension | active |
 
 Stage 5 uses an internal dynamic local subgoal about `1 m` ahead in `x` to help long-distance progress. This local subgoal is not a hand-authored avoidance path. The visible Gazebo ball marks the final mission target.
+
+Stage 6 is left as a planned extension for combining sequential targets with obstacle avoidance after the sideway curriculum is stable.
 
 ## Syntax Check
 
@@ -118,23 +119,6 @@ python3 train.py \
   --plateau-min-delta 1.0
 ```
 
-Stage 6:
-
-```bash
-python3 train.py \
-  --stage 6 \
-  --resume-from models/stage5/run001/best/best_precision_model.zip \
-  --success-distance 0.25 \
-  --max-steps 2200 \
-  --timesteps 80000 \
-  --step-dt 0.05 \
-  --log-position-every 100 \
-  --early-stop-plateau \
-  --plateau-window 50 \
-  --plateau-patience 60 \
-  --plateau-min-delta 0.5
-```
-
 ## Evaluation Example
 
 ```bash
@@ -156,13 +140,6 @@ Stage 5:
 ```bash
 vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
   world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
-```
-
-Stage 6:
-
-```bash
-vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
-  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage5_obstacle.world
 ```
 
 `train.py` does not load worlds. It uses whatever Gazebo world is already running.
