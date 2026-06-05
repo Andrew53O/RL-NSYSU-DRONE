@@ -2,7 +2,7 @@
 
 Part 3+Y is a copy of Part 3 with one new sideway movement stage inserted between the old Stage 2 and old Stage 3.
 
-The copied models and logs intentionally stop at Stage 2B. This lets the new curriculum continue from the trained Stage 2B checkpoint, then learn `y` movement before going back to random x/z navigation and obstacle stages.
+The copied models and logs intentionally stop at Stage 2B. This lets the new curriculum continue from the trained Stage 2B checkpoint, then learn `y` movement before going back to random 3D navigation and obstacle stages.
 
 ## Design
 
@@ -34,8 +34,8 @@ Observation stays fixed at 41 values. Sonar fields are present from Stage 1, but
 | 2B | Random x movement | `x in [-1, 2]` | masked |
 | 3A | Fixed sideway movement | `(0, 1, 0.8)` | masked |
 | 3B | Random sideway movement | `y in [-1.5, 1.5]`, `x = 0`, `z = 0.8` | masked |
-| 4A | Random x/z navigation | random x/z target | masked |
-| 4B | Sequential navigation | 3 random x/z targets | masked |
+| 4A | Random x/y/z navigation | random `x,y in [-1, 1]`, `z in [0.5, 2.0]` | masked |
+| 4B | Sequential navigation | 3 random x/y/z targets with the same range as 4A | masked |
 | 5 | One-obstacle avoidance | mission goal `(10, 0, 1)` | active |
 | 6 | Planned extension for sequential targets plus obstacles | future extension | active |
 
