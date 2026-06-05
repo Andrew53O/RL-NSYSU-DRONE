@@ -104,6 +104,20 @@ class BestTrainingModelCallback(BaseCallback):
                 self.model.save(self.best_model_dir / "best_precision_model.zip")
                 saved.append("best_precision_model")
 
+            if self.verbose:
+                print(
+                    "[episode] "
+                    f"episode={len(self.rewards)} "
+                    f"timesteps={self.num_timesteps} "
+                    f"status={status} "
+                    f"reward={reward:.3f} "
+                    f"recent_avg={recent_average:.3f} "
+                    f"recent_success={recent_success_rate:.3f} "
+                    f"distance={distance:.3f} "
+                    f"targets_reached={targets_reached}",
+                    flush=True,
+                )
+
             if saved:
                 with self.summary_path.open("a", newline="") as fp:
                     writer = csv.DictWriter(
@@ -255,8 +269,8 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Stop when the moving average reward no longer improves.",
     )
-    parser.add_argument("--plateau-window", type=int, default=50)
-    parser.add_argument("--plateau-patience", type=int, default=50)
+    parser.add_argument("--plateau-window", type=int, default=30)
+    parser.add_argument("--plateau-patience", type=int, default=30)
     parser.add_argument("--plateau-min-delta", type=float, default=1.0)
     parser.add_argument("--run-name", type=str, default=None)
     parser.add_argument("--overwrite", action="store_true")
