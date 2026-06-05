@@ -59,6 +59,19 @@ navigation lessons, so the drone should learn fairly precise target reaching.
 Use `--success-distance 0.20` for Stages 5-6 because the far obstacle mission is
 longer and the avoidance path can naturally finish with more lateral error.
 
+Episode length is also a curriculum hyperparameter. Shorter early episodes keep
+failed exploration from drifting too far, while later stages need more steps for
+multi-axis navigation and obstacle avoidance.
+
+| Stage | Variant | `--max-steps` |
+| --- | --- | ---: |
+| 1 | A/B | 150 |
+| 2 | A/B | 200 |
+| 3 | A/B | 200 |
+| 4 | A | 300 |
+| 4 | B | 500 |
+| 5 | A/B | 600 |
+
 Run the stages in order. If you retrain a stage and the run number changes,
 replace `run001` or `run002` in the next command with your newest successful
 run.
@@ -72,6 +85,7 @@ python3 train.py \
   --stage 1 \
   --variant A \
   --success-distance 0.10 \
+  --max-steps 150 \
   --timesteps 30000 \
   --step-dt 0.05
 ```
@@ -84,6 +98,7 @@ python3 test.py \
   --variant A \
   --model models/stage1/variantA/run002/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 150 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -97,6 +112,7 @@ python3 train.py \
   --variant B \
   --resume-from models/stage1/variantA/run002/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 150 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -109,6 +125,7 @@ python3 test.py \
   --variant B \
   --model models/stage1/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 150 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -124,6 +141,7 @@ python3 train.py \
   --variant A \
   --resume-from models/stage1/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -136,6 +154,7 @@ python3 test.py \
   --variant A \
   --model models/stage2/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -149,6 +168,7 @@ python3 train.py \
   --variant B \
   --resume-from models/stage2/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --timesteps 50000 \
   --step-dt 0.05
 ```
@@ -161,6 +181,7 @@ python3 test.py \
   --variant B \
   --model models/stage2/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -176,6 +197,7 @@ python3 train.py \
   --variant A \
   --resume-from models/stage2/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --timesteps 30000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -189,6 +211,7 @@ python3 test.py \
   --variant A \
   --model models/stage3/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -202,6 +225,7 @@ python3 train.py \
   --variant B \
   --resume-from models/stage3/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --timesteps 50000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -215,6 +239,7 @@ python3 test.py \
   --variant B \
   --model models/stage3/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 200 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -230,6 +255,7 @@ python3 train.py \
   --variant A \
   --resume-from models/stage3/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 300 \
   --timesteps 50000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -243,6 +269,7 @@ python3 test.py \
   --variant A \
   --model models/stage4/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 300 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -256,6 +283,7 @@ python3 train.py \
   --variant B \
   --resume-from models/stage4/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 500 \
   --timesteps 80000 \
   --step-dt 0.05 \
   --early-stop-plateau
@@ -269,6 +297,7 @@ python3 test.py \
   --variant B \
   --model models/stage4/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
+  --max-steps 500 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
@@ -291,7 +320,7 @@ python3 train.py \
   --variant A \
   --resume-from models/stage4/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.20 \
-  --max-steps 1800 \
+  --max-steps 600 \
   --timesteps 120000 \
   --step-dt 0.05 \
   --log-position-every 50 \
@@ -309,7 +338,7 @@ python3 test.py \
   --variant A \
   --model models/stage5/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.20 \
-  --max-steps 1800 \
+  --max-steps 600 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 100
@@ -324,7 +353,7 @@ python3 train.py \
   --variant B \
   --resume-from models/stage5/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.20 \
-  --max-steps 1800 \
+  --max-steps 600 \
   --timesteps 120000 \
   --step-dt 0.05 \
   --log-position-every 50
