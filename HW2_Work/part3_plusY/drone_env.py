@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seven-stage Gymnasium environment for NSYSU drone PPO with lateral Stage 3.
+"""Five-stage Gymnasium environment for NSYSU drone PPO with lateral Stage 3.
 
 Part 3+Y keeps one fixed observation/action interface across all stages. Sonar
 fields exist from Stage 1, but they are masked to safe constants until Stage 5
@@ -44,7 +44,9 @@ SONAR_COUNT = len(SONAR_SECTORS)
 OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part3_rl_target_marker"
 STAGE5_FINAL_GOAL = np.array([10.0, 0.0, 1.0], dtype=np.float32)
+STAGE5_GOAL_RADIUS = 10.0
 STAGE5_LOCAL_GOAL_STEP = 1.0
+GENERATED_OBSTACLE_NAME = "part3_plusy_generated_cone"
 TARGET_MARKER_COLORS = (
     (0.0, 1.0, 0.1, 1.0),  # first target: green
     (0.0, 0.25, 1.0, 1.0),  # second target: blue
@@ -69,8 +71,33 @@ TARGET_MARKER_SDF_TEMPLATE = """
   </model>
 </sdf>
 """
+GENERATED_CONE_SDF = """
+<sdf version="1.6">
+  <model name="{name}">
+    <static>true</static>
+    <link name="link">
+      <collision name="collision">
+        <geometry>
+          <mesh>
+            <scale>10 10 10</scale>
+            <uri>model://construction_cone/meshes/construction_cone.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <scale>10 10 10</scale>
+            <uri>model://construction_cone/meshes/construction_cone.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>
+"""
 
-
+# build the ball marker in the world 
 def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> str:
     emissive = (
         color[0] * TARGET_MARKER_EMISSIVE_SCALE,
@@ -86,6 +113,7 @@ def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> st
     )
 
 
+# Environment Stage configuration specification 
 @dataclass(frozen=True)
 class StageSpec:
     name: str
@@ -165,28 +193,22 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         sonar_enabled=True,
         focus="obstacle",
     ),
-    (6, "A"): StageSpec(
-        name="stage6_multi_obstacle",
-        description="long-goal multi-obstacle sonar avoidance",
+    (5, "B"): StageSpec(
+        name="stage5B_random_radial_obstacle",
+        description="random radius-10 x/y mission target with generated midpoint cone",
         fixed_targets=((10.0, 0.0, 1.0),),
         sonar_enabled=True,
         focus="obstacle",
-    ),
-    (7, "A"): StageSpec(
-        name="stage7_sequence_obstacle",
-        description="sequential targets with active sonar avoidance",
-        fixed_targets=((1.5, -0.8, 1.0), (2.4, 0.8, 1.1), (3.0, 0.0, 1.0)),
-        sequence_count=3,
-        sonar_enabled=True,
-        focus="mission",
     ),
 }
 
 
 def normalize_variant(stage: int, variant: str) -> str:
     variant = variant.upper()
-    if stage >= 5:
-        return "A"
+    if stage == 5:
+        if variant not in ("A", "B"):
+            raise ValueError("stage 5 variant must be A or B")
+        return variant
     if variant not in ("A", "B"):
         raise ValueError("variant must be A or B")
     return variant
@@ -221,6 +243,7 @@ class DroneRosBridge(Node):
         self.target_marker_enabled = SpawnEntity is not None and DeleteEntity is not None
         self.target_marker_spawned = False
         self.target_marker_names: set[str] = set()
+        self.generated_obstacle_spawned = False
         self.target_marker_warning_logged = False
         self.reset_world_warning_logged = False
 
@@ -378,9 +401,33 @@ class DroneRosBridge(Node):
     def update_target_marker(self, target: np.ndarray) -> None:
         self.update_target_markers(np.array([target], dtype=np.float32))
 
+    def clear_generated_obstacle(self) -> None:
+        if not self.target_marker_enabled:
+            return
+        self._delete_target_marker(GENERATED_OBSTACLE_NAME)
+        self.generated_obstacle_spawned = False
+
+    def spawn_generated_cone(self, position: np.ndarray) -> None:
+        if not self.target_marker_enabled:
+            return
+        if not self.spawn_entity_client.wait_for_service(timeout_sec=0.5):
+            return
+        self.clear_generated_obstacle()
+        req = SpawnEntity.Request()
+        req.name = GENERATED_OBSTACLE_NAME
+        req.xml = GENERATED_CONE_SDF.format(name=GENERATED_OBSTACLE_NAME)
+        req.reference_frame = "world"
+        req.initial_pose.position.x = float(position[0])
+        req.initial_pose.position.y = float(position[1])
+        req.initial_pose.position.z = float(position[2])
+        req.initial_pose.orientation.w = 1.0
+        future = self.spawn_entity_client.call_async(req)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=0.8)
+        self.generated_obstacle_spawned = bool(future.done() and future.result() is not None)
+
 
 class DroneCurriculumEnv(gym.Env):
-    """Seven-stage drone curriculum with masked sonar before obstacle stages."""
+    """Five-stage drone curriculum with masked sonar before obstacle stages."""
 
     metadata = {"render_modes": []}
 
@@ -488,6 +535,7 @@ class DroneCurriculumEnv(gym.Env):
         if not takeoff_ok or self.ros.pose is None:
             raise RuntimeError("Part 3 reset/takeoff failed; restart Gazebo and try again.")
 
+        self._update_stage_obstacle()
         obs = self._get_obs()
         self._update_stage_markers(force=True)
         self.previous_distance = float(self.last_info["distance_to_target"])
@@ -621,6 +669,18 @@ class DroneCurriculumEnv(gym.Env):
         if self.target_override is not None:
             return np.array([self.target_override], dtype=np.float32)
         if self.stage == 5:
+            if self.variant == "B":
+                angle = random.uniform(-math.pi, math.pi)
+                return np.array(
+                    [
+                        (
+                            STAGE5_GOAL_RADIUS * math.cos(angle),
+                            STAGE5_GOAL_RADIUS * math.sin(angle),
+                            1.0,
+                        )
+                    ],
+                    dtype=np.float32,
+                )
             return np.array([STAGE5_FINAL_GOAL], dtype=np.float32)
         if self.stage_spec.sequence_count > 1:
             targets = [self._sample_one_target(index) for index in range(self.stage_spec.sequence_count)]
@@ -630,12 +690,29 @@ class DroneCurriculumEnv(gym.Env):
     def _stage5_local_target(self) -> np.ndarray:
         mission_goal = self.mission_goal
         if self.ros.pose is None:
-            local_x = min(STAGE5_LOCAL_GOAL_STEP, float(mission_goal[0]))
-            return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
-        # The local target advances one meter ahead of the drone in x. Sonar,
-        # not a preplanned path, decides whether the drone shifts sideways/up.
-        local_x = min(float(self.ros.pose[0]) + STAGE5_LOCAL_GOAL_STEP, float(mission_goal[0]))
-        return np.array([local_x, 0.0, float(mission_goal[2])], dtype=np.float32)
+            direction = mission_goal.copy()
+            direction[2] = 0.0
+            norm = float(np.linalg.norm(direction[:2]))
+            if norm < 1e-6:
+                return mission_goal.copy()
+            local_xy = direction[:2] / norm * min(STAGE5_LOCAL_GOAL_STEP, norm)
+            return np.array([local_xy[0], local_xy[1], float(mission_goal[2])], dtype=np.float32)
+        # The local target advances one meter along the direct vector to the
+        # mission goal. Sonar, not a preplanned path, decides any avoidance.
+        pose = self.ros.pose.astype(np.float32)
+        vector = mission_goal - pose
+        distance = float(np.linalg.norm(vector))
+        if distance <= STAGE5_LOCAL_GOAL_STEP:
+            return mission_goal.copy()
+        return (pose + vector / distance * STAGE5_LOCAL_GOAL_STEP).astype(np.float32)
+
+    def _update_stage_obstacle(self) -> None:
+        if self.stage == 5 and self.variant == "B" and self.ros.pose is not None:
+            midpoint = (self.ros.pose + self.mission_goal) / 2.0
+            midpoint[2] = 0.05
+            self.ros.spawn_generated_cone(midpoint)
+        else:
+            self.ros.clear_generated_obstacle()
 
     def _update_stage_markers(self, force: bool = False) -> None:
         if not force:
@@ -657,8 +734,6 @@ class DroneCurriculumEnv(gym.Env):
         x = random.uniform(*self.stage_spec.x_bounds) if self.stage_spec.x_bounds else base[0]
         y = random.uniform(*self.stage_spec.y_bounds) if self.stage_spec.y_bounds else base[1]
         z = random.uniform(*self.stage_spec.z_bounds) if self.stage_spec.z_bounds else base[2]
-        if self.stage >= 7 and self.stage_spec.y_bounds is None:
-            y = random.uniform(-1.0, 1.0)
         return (float(x), float(y), float(z))
 
     def _axis_progress_reward(self, delta: np.ndarray) -> float:
@@ -735,9 +810,16 @@ class DroneCurriculumEnv(gym.Env):
         total_targets = max(len(self.targets), 1)
         target_progress = self.target_index / max(total_targets - 1, 1)
         if self.stage == 5 and pose is not None and math.isfinite(float(pose[0])):
-            # Obstacle stages use forward course progress instead of waypoint
+            # Obstacle stages use mission course progress instead of waypoint
             # index progress because the active target is a moving local subgoal.
-            target_progress = float(np.clip(pose[0] / max(float(self.mission_goal[0]), 0.1), 0.0, 1.0))
+            mission_distance_for_progress = float(np.linalg.norm(self.mission_goal - pose))
+            target_progress = float(
+                np.clip(
+                    (STAGE5_GOAL_RADIUS - mission_distance_for_progress) / STAGE5_GOAL_RADIUS,
+                    0.0,
+                    1.0,
+                )
+            )
         dx_norm = 10.0 if self.stage >= 5 else 3.0
         dy_norm = 5.0 if self.stage >= 5 else 3.0
         distance_norm = 12.0 if self.stage >= 5 else 4.0

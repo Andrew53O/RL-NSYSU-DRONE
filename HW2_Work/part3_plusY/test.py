@@ -34,7 +34,7 @@ DEFAULT_MODEL = PART3_DIR / "models" / "latest" / "ppo_drone.zip"
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate Part 3+Y drone PPO.")
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
-    parser.add_argument("--stage", type=int, choices=range(1, 8), default=1)
+    parser.add_argument("--stage", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--variant", choices=("A", "B", "a", "b"), default="A")
     parser.add_argument("--episodes", type=int, default=5)
     parser.add_argument("--target", nargs=3, type=float, default=None)
@@ -66,7 +66,7 @@ def infer_run(model_path: Path) -> tuple[str, str, str]:
 def next_eval_path(model_path: Path, stage: int, variant: str) -> Path:
     model_stage, model_variant, model_run = infer_run(model_path)
     stage_name = f"stage{stage}" if model_stage == "stage_unknown" else model_stage
-    variant_name = f"variant{variant}" if stage <= 4 else model_variant
+    variant_name = f"variant{variant}" if stage <= 5 else model_variant
     eval_dir = LOG_DIR / "eval" / stage_name / variant_name / model_run
     index = 1
     while True:

@@ -36,12 +36,20 @@ Observation stays fixed at 41 values. Sonar fields are present from Stage 1, but
 | 3B | Random sideway movement | `y in [-1.5, 1.5]`, `x = 0`, `z = 0.8` | masked |
 | 4A | Random x/y/z navigation | random `x,y in [-1, 1]`, `z in [0.5, 2.0]` | masked |
 | 4B | Sequential navigation | 3 random x/y/z targets with the same range as 4A | masked |
-| 5 | One-obstacle avoidance | mission goal `(10, 0, 1)` | active |
-| 6 | Planned extension for sequential targets plus obstacles | future extension | active |
+| 5A | One-obstacle avoidance | fixed mission goal `(10, 0, 1)` | active |
+| 5B | Random radial one-obstacle avoidance | mission goal `(X, Y, 1)`, where `(X, Y)` is sampled on a radius-10 circle | active |
 
-Stage 5 uses an internal dynamic local subgoal about `1 m` ahead in `x` to help long-distance progress. This local subgoal is not a hand-authored avoidance path. The visible Gazebo ball marks the final mission target.
+Stage 5 uses an internal dynamic local subgoal about `1 m` along the vector toward the mission goal to help long-distance progress. This local subgoal is not a hand-authored avoidance path. The visible Gazebo ball marks the final mission target.
 
-Stage 6 is left as a planned extension for combining sequential targets with obstacle avoidance after the sideway curriculum is stable.
+Stage 5B samples the final target on a circle around the start position:
+
+```text
+X = 10 * cos(theta)
+Y = 10 * sin(theta)
+Z = 1
+```
+
+For Stage 5B, the environment also spawns one generated `Construction Cone` at the midpoint between the drone's reset position and the sampled mission goal. This makes the obstacle depend on the target direction instead of using one fixed world obstacle.
 
 ## Syntax Check
 
@@ -102,14 +110,32 @@ python3 train.py \
   --early-stop-plateau
 ```
 
-Stage 5:
+Stage 5A:
 
 ```bash
 python3 train.py \
   --stage 5 \
+  --variant A \
   --resume-from models/stage4/variantB/run001/best/best_precision_model.zip \
   --max-steps 1800 \
   --timesteps 120000 \
+  --step-dt 0.05 \
+  --log-position-every 50 \
+  --early-stop-plateau \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0
+```
+
+Stage 5B:
+
+```bash
+python3 train.py \
+  --stage 5 \
+  --variant B \
+  --resume-from models/stage5/variantA/run001/best/best_precision_model.zip \
+  --max-steps 1800 \
+  --timesteps 160000 \
   --step-dt 0.05 \
   --log-position-every 50 \
   --early-stop-plateau \
@@ -232,13 +258,13 @@ python3 test.py \
   --log-position-every 25
 ```
 
-Stage 5:
+Stage 5A:
 
 ```bash
 python3 test.py \
   --stage 5 \
   --variant A \
-  --model models/stage5/run001/best/best_precision_model.zip \
+  --model models/stage5/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.25 \
   --episodes 10 \
   --step-dt 0.05 \
@@ -246,13 +272,13 @@ python3 test.py \
   --log-position-every 50
 ```
 
-Stage 6, after the planned extension is trained:
+Stage 5B:
 
 ```bash
 python3 test.py \
-  --stage 6 \
-  --variant A \
-  --model models/stage6/run001/best/best_precision_model.zip \
+  --stage 5 \
+  --variant B \
+  --model models/stage5/variantB/run001/best/best_precision_model.zip \
   --success-distance 0.25 \
   --episodes 10 \
   --step-dt 0.05 \
@@ -264,11 +290,18 @@ python3 test.py \
 
 Launch the correct world before training/testing obstacle stages.
 
-Stage 5:
+Stage 5A uses the fixed one-obstacle world:
 
 ```bash
 vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
   world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
+```
+
+Stage 5B generates its own cone in the environment, so use the cleaned playground world:
+
+```bash
+vglrun ros2 launch nsysu_drone_bringup nsysu_drone_bringup.launch.py \
+  world:=/ros2_ws/src/nsysu_drone_description/worlds/playground.world
 ```
 
 `train.py` does not load worlds. It uses whatever Gazebo world is already running.

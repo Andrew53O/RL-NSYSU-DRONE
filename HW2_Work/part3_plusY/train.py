@@ -231,7 +231,7 @@ class PlateauStopCallback(BaseCallback):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train Part 3+Y drone curriculum PPO.")
-    parser.add_argument("--stage", type=int, choices=range(1, 8), default=1)
+    parser.add_argument("--stage", type=int, choices=range(1, 6), default=1)
     parser.add_argument("--variant", choices=("A", "B", "a", "b"), default="A")
     parser.add_argument("--timesteps", type=int, default=100_000)
     parser.add_argument("--smoke", action="store_true")
@@ -266,7 +266,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def run_root(base: Path, stage: int, variant: str) -> Path:
-    if stage <= 4:
+    if stage <= 5:
         return base / f"stage{stage}" / f"variant{variant}"
     return base / f"stage{stage}"
 
