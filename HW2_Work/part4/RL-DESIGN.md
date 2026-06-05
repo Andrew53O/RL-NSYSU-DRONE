@@ -325,17 +325,31 @@ This helps reduce overshoot. Without this term, the drone can fly through the ta
 
 ### Smoothness and Stability Penalties
 
-The reward includes three smoothness/stability terms:
+Part 3 did not strongly prioritize visually stable flight. It mainly rewarded reaching the target quickly, with only light penalties for large actions and sudden action changes. That made the drone successful, but the body could look wavy because PPO was allowed to switch velocity commands aggressively.
+
+Part 4 changes the reward at the smoothness block in `drone_env.py` so unstable command behavior is punished more:
 
 ```python
+action_norm = float(np.linalg.norm(filtered_action))
+action_delta_norm = float(np.linalg.norm(filtered_action - self.previous_action))
 reward -= 0.015 * velocity_norm
-reward -= 0.02 * norm(filtered_action)
-reward -= 0.06 * norm(filtered_action - previous_action)
+reward -= 0.02 * action_norm
+reward -= 0.06 * action_delta_norm
 ```
 
-The first term mildly discourages unnecessary high-speed motion throughout the episode. The second term discourages unnecessarily large commands. The third term discourages sudden changes between actions. This matters because sudden changes in velocity command make the drone tilt and wobble.
+The difference from Part 3 is:
 
-Compared with the earlier Part 4 reward, the action-change penalty is intentionally stronger. The goal is not to make the drone hover slowly, but to reduce the aggressive left/right/up/down command switching that makes the body attitude look unstable in Gazebo. Because the observation and action dimensions are unchanged, old checkpoints can still be loaded, but they should be fine-tuned with the updated reward if smoother behavior is desired.
+| Term | Part 3 | Part 4 | Meaning |
+| --- | ---: | ---: | --- |
+| Action magnitude penalty | `0.01 * action_norm` | `0.02 * action_norm` | Punishes overly strong velocity commands more |
+| Action-change penalty | `0.02 * action_delta_norm` | `0.06 * action_delta_norm` | Punishes sudden command switching more |
+| General velocity penalty | none | `0.015 * velocity_norm` | Mildly discourages unnecessary high-speed motion |
+
+`action_norm` means the size of the current velocity command. A larger value means the policy is asking the drone to move more aggressively. `action_delta_norm` means the size of the change from the previous command to the current command. A larger value means the policy suddenly changed direction or command strength.
+
+The first Part 4 term mildly discourages unnecessary high-speed motion throughout the episode. The second term discourages unnecessarily large commands. The third term discourages sudden changes between actions. This matters because sudden changes in velocity command make the drone tilt and wobble.
+
+The goal is not to make the drone hover slowly, but to reduce the aggressive left/right/up/down command switching that makes the body attitude look unstable in Gazebo. Because the observation and action dimensions are unchanged, old checkpoints can still be loaded, but the model should be retrained or fine-tuned with the Part 4 reward if smoother behavior is desired.
 
 ### Sonar Risk Penalty
 
