@@ -304,12 +304,41 @@ It also penalizes axis errors:
 
 | Focus | Precision Penalty |
 | --- | --- |
-| Vertical | `0.45*x_error + 0.45*y_error + 0.65*z_error` |
-| Horizontal x | `0.45*x_error + 0.20*y_error + 0.45*z_error` |
-| Lateral y | `0.30*x_error + 0.55*y_error + 0.45*z_error` |
+| Vertical | `1.5*x_error + 1.5*y_error + 0.8*z_error` |
+| Horizontal x | `0.8*x_error + 1.2*y_error + 1.2*z_error` |
+| Lateral y | `1.2*x_error + 0.8*y_error + 1.2*z_error` |
 | Combined/Obstacle | `0.35*x_error + 0.25*y_error + 0.35*z_error` |
 
-For the lateral stage, the y error penalty is highest. This tells PPO that y accuracy matters, not only x and z.
+The Part 4 precision penalty is intentionally different from the earlier Part 3-style version. In the single-axis stages, the axis being learned is not the only thing that matters. The other axes should stay stable. For example, in Stage 1 the drone should learn altitude, but it should not drift far in x or y while doing that. Therefore, vertical focus uses strong x/y penalties:
+
+```python
+if self.stage_spec.focus == "vertical":
+    return 1.5 * x_error + 1.5 * y_error + 0.8 * z_error
+```
+
+For Stage 2, the drone learns x-axis movement, so y and z are punished more strongly to keep the drone from drifting sideways or changing altitude too much:
+
+```python
+if self.stage_spec.focus == "horizontal":
+    return 0.8 * x_error + 1.2 * y_error + 1.2 * z_error
+```
+
+For Stage 3, the drone learns y-axis movement, so x and z are punished more strongly:
+
+```python
+if self.stage_spec.focus == "lateral":
+    return 1.2 * x_error + 0.8 * y_error + 1.2 * z_error
+```
+
+The reason the main training axis has a smaller precision weight is that axis already receives a strong progress reward from `_axis_progress_reward`. The precision penalty is therefore used partly as a stability term: it keeps the axes that should remain fixed from drifting away.
+
+The fallback combined/obstacle penalty stays milder:
+
+```python
+return 0.35 * x_error + 0.25 * y_error + 0.35 * z_error
+```
+
+This is especially useful in obstacle stages, because the drone may need temporary y deviation to avoid cones. If y were punished too strongly during obstacle avoidance, the policy might become afraid to move sideways even when sonar risk says it should.
 
 ### Near-Target Braking Penalty
 
