@@ -118,16 +118,146 @@ python3 train.py \
   --plateau-min-delta 1.0
 ```
 
-## Evaluation Example
+## Testing Commands
+
+Run tests from inside the Part 3+Y folder:
+
+```bash
+cd /workspace/HW2_Work/part3_plusY
+```
+
+Stage 1A:
+
+```bash
+python3 test.py \
+  --stage 1 \
+  --variant A \
+  --model models/stage1/variantA/run002/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 1B:
+
+```bash
+python3 test.py \
+  --stage 1 \
+  --variant B \
+  --model models/stage1/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 2A:
+
+```bash
+python3 test.py \
+  --stage 2 \
+  --variant A \
+  --model models/stage2/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 2B:
+
+```bash
+python3 test.py \
+  --stage 2 \
+  --variant B \
+  --model models/stage2/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 3A:
 
 ```bash
 python3 test.py \
   --stage 3 \
   --variant A \
   --model models/stage3/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
+```
+
+Stage 3B:
+
+```bash
+python3 test.py \
+  --stage 3 \
+  --variant B \
+  --model models/stage3/variantB/run003/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+If you want to test an earlier Stage 3B run, change the model path to `run001` or `run002`.
+
+Stage 4A:
+
+```bash
+python3 test.py \
+  --stage 4 \
+  --variant A \
+  --model models/stage4/variantA/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 4B:
+
+```bash
+python3 test.py \
+  --stage 4 \
+  --variant B \
+  --model models/stage4/variantB/run001/best/best_precision_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 5:
+
+```bash
+python3 test.py \
+  --stage 5 \
+  --variant A \
+  --model models/stage5/run001/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --max-steps 1800 \
+  --log-position-every 50
+```
+
+Stage 6, after the planned extension is trained:
+
+```bash
+python3 test.py \
+  --stage 6 \
+  --variant A \
+  --model models/stage6/run001/best/best_precision_model.zip \
+  --success-distance 0.25 \
+  --episodes 10 \
+  --step-dt 0.05 \
+  --max-steps 1800 \
+  --log-position-every 50
 ```
 
 ## Gazebo Worlds
