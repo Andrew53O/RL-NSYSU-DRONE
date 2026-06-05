@@ -72,6 +72,26 @@ multi-axis navigation and obstacle avoidance.
 | 4 | B | 500 |
 | 5 | A/B | 600 |
 
+Early stopping is controlled by the plateau settings in `train.py`. The Part 4
+defaults are:
+
+| Option | Default | Meaning |
+| --- | ---: | --- |
+| `--plateau-window` | 30 | Average reward over the latest 30 episodes |
+| `--plateau-patience` | 30 | Stop after 30 plateau checks without enough improvement |
+| `--plateau-min-delta` | 1.0 | Required reward improvement to reset patience |
+
+Use `--early-stop-plateau` when you want training to finish automatically after
+the recent reward curve becomes flat. The default plateau settings are usually
+fine for the simple Stage 1-4 curriculum runs:
+
+```bash
+--early-stop-plateau \
+--plateau-window 30 \
+--plateau-patience 30 \
+--plateau-min-delta 1.0
+```
+
 Run the stages in order. If you retrain a stage and the run number changes,
 replace `run001` or `run002` in the next command with your newest successful
 run.
