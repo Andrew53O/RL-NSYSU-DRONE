@@ -61,6 +61,8 @@ The final fork uses shorter deadline-friendly defaults:
 
 ```text
 timesteps: 50000
+max_steps: 800
+success_distance: 0.10
 step_dt: 0.05
 early_stop_plateau: enabled
 plateau_window: 30
@@ -68,12 +70,63 @@ plateau_patience: 30
 plateau_min_delta: 1.0
 ```
 
-The action penalties are also saved in every `run_config.json`:
+PPO defaults:
+
+```text
+policy: MlpPolicy
+learning_rate: 0.0003
+n_steps: 512
+batch_size: 64
+gamma: 0.99
+device: cpu
+checkpoint_freq: 10000
+best_window: 20
+```
+
+Reward/action penalty defaults:
 
 ```text
 near_target_action_penalty: 0.3
 action_penalty: 0.03
 action_smoothness_penalty: 0.09
+```
+
+All of these values are saved in both `models/.../run_config.json` and
+`logs/.../run_config.json`.
+
+Full command template:
+
+```bash
+python3 train.py \
+  --stage 4 \
+  --variant A \
+  --resume-from models/stage3/variantB/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
+```
+
+`--early-stop-plateau` is already enabled by default. Use
+`--no-early-stop-plateau` only when you want the run to always consume all
+timesteps.
+
+For a quick script check, use:
+
+```bash
+python3 train.py --stage 1 --variant A --smoke
 ```
 
 ## Best Model Rule
