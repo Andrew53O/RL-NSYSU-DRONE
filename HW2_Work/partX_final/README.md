@@ -30,8 +30,8 @@ same curriculum as Part 3+Y:
 | 3 | B | Random y movement | random `y in [-1.0, 1.0]` with fixed `x = 0`, `z = 1.0` | masked |
 | 4 | A | Random single-target 3D navigation | one random target with `x,y in [-1.0, 1.0]`, `z in [0.8, 1.5]` | masked |
 | 4 | B | Sequential 3D navigation | three random x/y/z targets using the same range as Stage 4A | masked |
-| 5 | A | Fixed one-obstacle sonar mission | final mission goal `(10, 0, 1)` with one obstacle world and active sonar observations | active |
-| 5 | B | Random radial one-obstacle mission | final mission goal `(X, Y, 1)` sampled on a radius-10 circle, with the env generating a midpoint cone | active |
+| 5 | A | Fixed one-obstacle sonar mission | final mission goal `(10, 0, 1)` with one generated midpoint cone and active sonar observations | active |
+| 5 | B | Forward corridor sonar mission | final mission goal `(10, Y, 1)` with `Y in [-3, 3]`, plus `2-10` random generated cones inside the forward corridor | active |
 
 Stage 5 uses an internal dynamic local subgoal about `1 m` along the vector
 toward the final mission goal. This helps the long obstacle mission produce
@@ -43,22 +43,16 @@ path. The visible Gazebo ball still marks the final mission target.
 `train.py` and `test.py` do not launch Gazebo worlds. They use whatever world is
 already running.
 
-Use `playground.world` for Stage 1-4:
+Use `playground.world` for all stages:
 
 ```bash
 ros2 launch nsysu_drone_description launch_drone.py \
   world:=/ros2_ws/src/nsysu_drone_description/worlds/playground.world
 ```
 
-Use `stage4_obstacle.world` for Stage 5A:
-
-```bash
-ros2 launch nsysu_drone_description launch_drone.py \
-  world:=/ros2_ws/src/nsysu_drone_description/worlds/stage4_obstacle.world
-```
-
-Use `playground.world` again for Stage 5B, because the environment generates
-its own midpoint cone.
+Stage 5 also uses `playground.world`, because the environment generates its own
+cones. Stage 5A generates one midpoint cone. Stage 5B generates `2-10` random
+cones in the corridor `x in [0, 10]`, `y in [-3, 3]`.
 
 ## Training Defaults
 
