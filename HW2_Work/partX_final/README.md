@@ -168,7 +168,7 @@ python3 train.py \
   --variant A \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -207,7 +207,7 @@ python3 train.py \
   --resume-from models/stage1/variantA/run001/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -232,7 +232,7 @@ python3 test.py \
   --model models/stage1/variantB/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
@@ -246,7 +246,7 @@ python3 train.py \
   --resume-from models/stage1/variantB/run001/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -271,7 +271,7 @@ python3 test.py \
   --model models/stage2/variantA/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
@@ -285,7 +285,7 @@ python3 train.py \
   --resume-from models/stage2/variantA/run001/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \

@@ -7,3 +7,4 @@ episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distan
 14,4890,82.856896,success,-62.459848071428574,0.7857142857142857,0.07364024221897125,0,best_episode_model
 29,9684,91.118979,success,-24.712001849999996,0.9,0.07895064353942871,0,best_episode_model
 46,13722,22.950684,success,6.0071598,0.95,0.09499433636665344,0,best_average_model
+123

@@ -31,3 +31,10 @@
   "timesteps": 50000,
   "variant": "A"
 }
+
+
+uses
+
+reward -= 0.5 * norm(filtered_action)          # near target
+reward -= 0.05 * norm(filtered_action)         # global action size
+reward -= 0.15 * norm(action_delta)            # smoothness/action change
