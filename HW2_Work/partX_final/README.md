@@ -90,6 +90,29 @@ action_penalty: 0.03
 action_smoothness_penalty: 0.09
 ```
 
+Some later Part X runs used a lighter penalty setting:
+
+```text
+action_penalty: 0.0
+action_smoothness_penalty: 0.03
+near_target_action_penalty: 0.05
+```
+
+These three values control how much the reward discourages aggressive motion.
+They do not change the action space; they only change the reward feedback PPO
+receives during training.
+
+| Hyperparameter | What it means | Increase it when | Decrease it when |
+| --- | --- | --- | --- |
+| `action_penalty` | Penalizes the size of every velocity command. A larger value means the drone is rewarded for using smaller commands in general. | the drone moves too fast, shakes, or uses large commands even when it is not necessary | the drone becomes too lazy, does not move enough, or cannot reach the target before timeout |
+| `action_smoothness_penalty` | Penalizes sudden changes between the previous action and the current action. This makes the command sequence smoother. | the flight path is jerky, the drone keeps changing direction quickly, or Gazebo motion looks unstable | the drone reacts too slowly, cannot correct its path, or avoids obstacles too late |
+| `near_target_action_penalty` | Penalizes action size only when the drone is close to the target. This helps it slow down near the goal instead of flying through it. | the drone reaches the target area but overshoots, circles, or passes through without stopping | the drone slows down too early, gets stuck near the target, or cannot make the final small correction |
+
+In short: increase these values to make the policy more careful and smooth.
+Decrease them to make the policy more willing to move and correct itself. For
+the current shorter training runs, the lighter setting above can help the drone
+keep moving while still reducing near-target overshoot.
+
 All of these values are saved in both `models/.../run_config.json` and
 `logs/.../run_config.json`.
 
@@ -329,10 +352,12 @@ python3 train.py \
   --plateau-window 30 \
   --plateau-patience 30 \
   --plateau-min-delta 1.0 \
-  --near-target-action-penalty 0.3 \
-  --action-penalty 0.03 \
-  --action-smoothness-penalty 0.09
+  --near-target-action-penalty 0.05 \
+  --action-penalty 0.03\
+  --action-smoothness-penalty 0.03
 ```
+
+this train uses small penalty to make it will move until the target
 
 Stage 3A test:
 
@@ -343,7 +368,7 @@ python3 test.py \
   --model models/stage3/variantA/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
@@ -354,10 +379,10 @@ Stage 3B train:
 python3 train.py \
   --stage 3 \
   --variant B \
-  --resume-from models/stage3/variantA/run001/best/best_average_model.zip \
+  --resume-from models/stage3/variantA/run002/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -368,9 +393,9 @@ python3 train.py \
   --plateau-window 30 \
   --plateau-patience 30 \
   --plateau-min-delta 1.0 \
-  --near-target-action-penalty 0.3 \
-  --action-penalty 0.03 \
-  --action-smoothness-penalty 0.09
+  --near-target-action-penalty 0.05 \
+  --action-penalty 0.01\
+  --action-smoothness-penalty 0.03
 ```
 
 Stage 3B test:
@@ -382,7 +407,7 @@ python3 test.py \
   --model models/stage3/variantB/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
@@ -396,7 +421,7 @@ python3 train.py \
   --resume-from models/stage3/variantB/run001/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -407,9 +432,9 @@ python3 train.py \
   --plateau-window 30 \
   --plateau-patience 30 \
   --plateau-min-delta 1.0 \
-  --near-target-action-penalty 0.3 \
+  --near-target-action-penalty 0.05 \
   --action-penalty 0.03 \
-  --action-smoothness-penalty 0.09
+  --action-smoothness-penalty 0.03
 ```
 
 Stage 4A test:
@@ -421,11 +446,12 @@ python3 test.py \
   --model models/stage4/variantA/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 300 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
 
+using low penalty
 Stage 4B train:
 
 ```bash
@@ -435,7 +461,7 @@ python3 train.py \
   --resume-from models/stage4/variantA/run001/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 700 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -446,9 +472,33 @@ python3 train.py \
   --plateau-window 30 \
   --plateau-patience 30 \
   --plateau-min-delta 1.0 \
-  --near-target-action-penalty 0.3 \
+  --near-target-action-penalty 0.05 \
   --action-penalty 0.03 \
-  --action-smoothness-penalty 0.09
+  --action-smoothness-penalty 0.03
+```
+
+using high penalty
+```bash
+python3 train.py \
+  --stage 4 \
+  --variant B \
+  --resume-from models/stage4/variantA/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 700 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.1 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.03
 ```
 
 Stage 4B test:
@@ -457,10 +507,10 @@ Stage 4B test:
 python3 test.py \
   --stage 4 \
   --variant B \
-  --model models/stage4/variantB/run001/best/best_average_model.zip \
+  --model models/stage4/variantB/run002/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 700 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
@@ -471,10 +521,10 @@ Stage 5A train:
 python3 train.py \
   --stage 5 \
   --variant A \
-  --resume-from models/stage4/variantB/run001/best/best_average_model.zip \
+  --resume-from models/stage4/variantB/run002/best/best_average_model.zip \
   --timesteps 50000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 1000 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -487,7 +537,8 @@ python3 train.py \
   --plateau-min-delta 1.0 \
   --near-target-action-penalty 0.3 \
   --action-penalty 0.03 \
-  --action-smoothness-penalty 0.09
+  --action-smoothness-penalty 0.09 \
+  --log-position-every 25
 ```
 
 Stage 5A test:
@@ -496,7 +547,7 @@ Stage 5A test:
 python3 test.py \
   --stage 5 \
   --variant A \
-  --model models/stage5/variantA/run001/best/best_average_model.zip \
+  --model models/stage5/variantA/run005/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
   --max-steps 800 \
@@ -510,10 +561,10 @@ Stage 5B train:
 python3 train.py \
   --stage 5 \
   --variant B \
-  --resume-from models/stage5/variantA/run001/best/best_average_model.zip \
-  --timesteps 50000 \
+  --resume-from models/stage5/variantA/run005/best/best_average_model.zip \
+  --timesteps 60000 \
   --success-distance 0.10 \
-  --max-steps 800 \
+  --max-steps 1000 \
   --step-dt 0.05 \
   --learning-rate 3e-4 \
   --n-steps 512 \
@@ -526,7 +577,8 @@ python3 train.py \
   --plateau-min-delta 1.0 \
   --near-target-action-penalty 0.3 \
   --action-penalty 0.03 \
-  --action-smoothness-penalty 0.09
+  --action-smoothness-penalty 0.09 \
+  --log-position-every 25
 ```
 
 Stage 5B test:
@@ -538,7 +590,7 @@ python3 test.py \
   --model models/stage5/variantB/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
-  --max-steps 800 \
+  --max-steps 1000 \
   --step-dt 0.05 \
   --log-position-every 25
 ```
