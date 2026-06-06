@@ -55,9 +55,20 @@ SONAR_COUNT = len(SONAR_SECTORS)
 OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part3_rl_target_marker"
 STAGE5_FINAL_GOAL = np.array([10.0, 0.0, 1.0], dtype=np.float32)
-STAGE5_GOAL_RADIUS = 10.0
 STAGE5_LOCAL_GOAL_STEP = 1.0
 GENERATED_OBSTACLE_NAME = "part3_plusy_generated_cone"
+STAGE5_CORRIDOR_X_MIN = 0.0
+STAGE5_CORRIDOR_X_MAX = 10.0
+STAGE5_CORRIDOR_Y_MIN = -3.0
+STAGE5_CORRIDOR_Y_MAX = 3.0
+STAGE5B_TARGET_Z = 1.0
+STAGE5_CONE_Z = 0.05
+STAGE5B_MIN_CONES = 2
+STAGE5B_MAX_CONES = 10
+STAGE5B_CONE_MIN_SPACING = 1.0
+STAGE5B_START_CLEARANCE = 1.5
+STAGE5B_GOAL_CLEARANCE = 1.5
+STAGE5B_CONE_SAMPLE_ATTEMPTS = 200
 TARGET_MARKER_COLORS = (
     (0.0, 1.0, 0.1, 1.0),  # first target: green
     (0.0, 0.25, 1.0, 1.0),  # second target: blue
@@ -218,8 +229,8 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         focus="obstacle",
     ),
     (5, "B"): StageSpec(
-        name="stage5B_random_radial_obstacle",
-        description="random radius-10 x/y mission target with generated midpoint cone",
+        name="stage5B_corridor_obstacles",
+        description="forward corridor target with 2-10 random generated cones",
         fixed_targets=((10.0, 0.0, 1.0),),
         sonar_enabled=True,
         focus="obstacle",
@@ -270,6 +281,7 @@ class DroneRosBridge(Node):
         self.target_marker_enabled = SpawnEntity is not None and DeleteEntity is not None
         self.target_marker_spawned = False
         self.target_marker_names: set[str] = set()
+        self.generated_obstacle_names: set[str] = set()
         self.generated_obstacle_spawned = False
         self.target_marker_warning_logged = False
         self.reset_world_warning_logged = False
@@ -451,28 +463,47 @@ class DroneRosBridge(Node):
     def clear_generated_obstacle(self) -> None:
         if not self.target_marker_enabled:
             return
-        self._delete_target_marker(GENERATED_OBSTACLE_NAME)
+        names = set(self.generated_obstacle_names)
+        names.add(GENERATED_OBSTACLE_NAME)
+        for index in range(STAGE5B_MAX_CONES):
+            names.add(self._generated_obstacle_name(index, STAGE5B_MAX_CONES))
+        for name in sorted(names):
+            self._delete_target_marker(name)
+        self.generated_obstacle_names.clear()
         self.generated_obstacle_spawned = False
 
+    def _generated_obstacle_name(self, index: int, obstacle_count: int) -> str:
+        if obstacle_count == 1:
+            return GENERATED_OBSTACLE_NAME
+        return f"{GENERATED_OBSTACLE_NAME}_{index + 1}"
+
     def spawn_generated_cone(self, position: np.ndarray) -> None:
+        self.spawn_generated_cones(np.array([position], dtype=np.float32))
+
+    def spawn_generated_cones(self, positions: np.ndarray) -> None:
         if not self.target_marker_enabled:
             return
         if not self.spawn_entity_client.wait_for_service(timeout_sec=0.5):
             return
-        # Variant B generates exactly one obstacle per reset. Clearing first
-        # prevents old generated cones from accumulating between episodes.
+        # Clear once before spawning so old cones from previous episodes do not
+        # accumulate in the corridor.
         self.clear_generated_obstacle()
-        req = SpawnEntity.Request()
-        req.name = GENERATED_OBSTACLE_NAME
-        req.xml = GENERATED_CONE_SDF.format(name=GENERATED_OBSTACLE_NAME)
-        req.reference_frame = "world"
-        req.initial_pose.position.x = float(position[0])
-        req.initial_pose.position.y = float(position[1])
-        req.initial_pose.position.z = float(position[2])
-        req.initial_pose.orientation.w = 1.0
-        future = self.spawn_entity_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=0.8)
-        self.generated_obstacle_spawned = bool(future.done() and future.result() is not None)
+        obstacle_count = len(positions)
+        for index, position in enumerate(positions):
+            obstacle_name = self._generated_obstacle_name(index, obstacle_count)
+            req = SpawnEntity.Request()
+            req.name = obstacle_name
+            req.xml = GENERATED_CONE_SDF.format(name=obstacle_name)
+            req.reference_frame = "world"
+            req.initial_pose.position.x = float(position[0])
+            req.initial_pose.position.y = float(position[1])
+            req.initial_pose.position.z = float(position[2])
+            req.initial_pose.orientation.w = 1.0
+            future = self.spawn_entity_client.call_async(req)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=0.8)
+            if future.done() and future.result() is not None:
+                self.generated_obstacle_names.add(obstacle_name)
+        self.generated_obstacle_spawned = bool(self.generated_obstacle_names)
 
 
 class DroneCurriculumEnv(gym.Env):
@@ -776,17 +807,11 @@ class DroneCurriculumEnv(gym.Env):
             return np.array([self.target_override], dtype=np.float32)
         if self.stage == 5:
             if self.variant == "B":
-                # Variant B keeps the mission length constant but randomizes the
-                # direction. This tests obstacle avoidance beyond a single path.
-                angle = random.uniform(-math.pi, math.pi)
+                # Variant B keeps the mission mostly forward for the front sonar
+                # while randomizing lateral goal position inside the corridor.
+                y = random.uniform(STAGE5_CORRIDOR_Y_MIN, STAGE5_CORRIDOR_Y_MAX)
                 return np.array(
-                    [
-                        (
-                            STAGE5_GOAL_RADIUS * math.cos(angle),
-                            STAGE5_GOAL_RADIUS * math.sin(angle),
-                            1.0,
-                        )
-                    ],
+                    [(STAGE5_CORRIDOR_X_MAX, y, STAGE5B_TARGET_Z)],
                     dtype=np.float32,
                 )
             return np.array([STAGE5_FINAL_GOAL], dtype=np.float32)
@@ -820,14 +845,62 @@ class DroneCurriculumEnv(gym.Env):
 
     def _update_stage_obstacle(self) -> None:
         if self.stage == 5 and self.ros.pose is not None:
-            # Stage 5 now uses playground.world for both variants and lets the
-            # environment create the obstacle. Variant A uses the fixed mission
-            # goal, while Variant B uses its random radius-10 mission goal.
-            midpoint = (self.ros.pose + self.mission_goal) / 2.0
-            midpoint[2] = 0.05
-            self.ros.spawn_generated_cone(midpoint)
+            if self.variant == "B":
+                self.ros.spawn_generated_cones(self._sample_stage5b_cones())
+            else:
+                # Stage 5A stays the simple bridge task: one cone halfway
+                # between takeoff position and the fixed forward goal.
+                midpoint = (self.ros.pose + self.mission_goal) / 2.0
+                midpoint[2] = STAGE5_CONE_Z
+                self.ros.spawn_generated_cone(midpoint)
         else:
             self.ros.clear_generated_obstacle()
+
+    def _sample_stage5b_cones(self) -> np.ndarray:
+        cone_count = random.randint(STAGE5B_MIN_CONES, STAGE5B_MAX_CONES)
+        positions: list[np.ndarray] = []
+        if self.ros.pose is not None:
+            start_pose = self.ros.pose.astype(np.float32)
+        else:
+            start_pose = np.zeros(3, dtype=np.float32)
+        goal = self.mission_goal.astype(np.float32)
+
+        for _ in range(STAGE5B_CONE_SAMPLE_ATTEMPTS):
+            if len(positions) >= cone_count:
+                break
+            candidate = np.array(
+                [
+                    random.uniform(STAGE5_CORRIDOR_X_MIN, STAGE5_CORRIDOR_X_MAX),
+                    random.uniform(STAGE5_CORRIDOR_Y_MIN, STAGE5_CORRIDOR_Y_MAX),
+                    STAGE5_CONE_Z,
+                ],
+                dtype=np.float32,
+            )
+            if self._stage5b_cone_position_valid(candidate, positions, start_pose, goal):
+                positions.append(candidate)
+
+        if len(positions) < cone_count:
+            self.ros.get_logger().warning(
+                f"Stage 5B requested {cone_count} cones but only sampled {len(positions)} valid cones"
+            )
+        return np.array(positions, dtype=np.float32)
+
+    def _stage5b_cone_position_valid(
+        self,
+        candidate: np.ndarray,
+        positions: list[np.ndarray],
+        start_pose: np.ndarray,
+        goal: np.ndarray,
+    ) -> bool:
+        candidate_xy = candidate[:2]
+        if float(np.linalg.norm(candidate_xy - start_pose[:2])) < STAGE5B_START_CLEARANCE:
+            return False
+        if float(np.linalg.norm(candidate_xy - goal[:2])) < STAGE5B_GOAL_CLEARANCE:
+            return False
+        for position in positions:
+            if float(np.linalg.norm(candidate_xy - position[:2])) < STAGE5B_CONE_MIN_SPACING:
+                return False
+        return True
 
     def _update_stage_markers(self, force: bool = False) -> None:
         if not force:
@@ -1008,9 +1081,11 @@ class DroneCurriculumEnv(gym.Env):
             # Obstacle stages use mission course progress instead of waypoint
             # index progress because the active target is a moving local subgoal.
             mission_distance_for_progress = float(np.linalg.norm(self.mission_goal - pose))
+            mission_start = np.array([0.0, 0.0, self.takeoff_altitude], dtype=np.float32)
+            mission_distance_start = max(float(np.linalg.norm(self.mission_goal - mission_start)), 1e-6)
             target_progress = float(
                 np.clip(
-                    (STAGE5_GOAL_RADIUS - mission_distance_for_progress) / STAGE5_GOAL_RADIUS,
+                    (mission_distance_start - mission_distance_for_progress) / mission_distance_start,
                     0.0,
                     1.0,
                 )
