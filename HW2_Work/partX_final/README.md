@@ -33,6 +33,11 @@ same curriculum as Part 3+Y:
 | 5 | A | Fixed one-obstacle sonar mission | final mission goal `(10, 0, 1)` with one obstacle world and active sonar observations | active |
 | 5 | B | Random radial one-obstacle mission | final mission goal `(X, Y, 1)` sampled on a radius-10 circle, with the env generating a midpoint cone | active |
 
+Stage 5 uses an internal dynamic local subgoal about `1 m` along the vector
+toward the final mission goal. This helps the long obstacle mission produce
+useful progress rewards without giving the drone a hand-authored avoidance
+path. The visible Gazebo ball still marks the final mission target.
+
 ## World Setup
 
 `train.py` and `test.py` do not launch Gazebo worlds. They use whatever world is
