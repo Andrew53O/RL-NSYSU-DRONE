@@ -31,7 +31,7 @@ same curriculum as Part 3+Y:
 | 4 | A | Random single-target 3D navigation | one random target with `x,y in [-1.0, 1.0]`, `z in [0.8, 1.5]` | masked |
 | 4 | B | Sequential 3D navigation | three random x/y/z targets using the same range as Stage 4A | masked |
 | 5 | A | Fixed one-obstacle sonar mission | final mission goal `(10, 0, 1)` with one generated midpoint cone and active sonar observations | active |
-| 5 | B | Forward corridor sonar mission | final mission goal `(10, Y, 1)` with `Y in [-3, 3]`, plus `2-10` random generated cones inside the forward corridor | active |
+| 5 | B | Forward corridor sonar mission | final mission goal `(10, Y, 1)` with `Y in [-3, 3]`, plus `2-10` random generated cones in the middle corridor `x in [2, 8]`, `y in [-2, 2]` | active |
 
 Stage 5 uses an internal dynamic local subgoal about `1 m` along the vector
 toward the final mission goal. This helps the long obstacle mission produce
@@ -52,7 +52,9 @@ ros2 launch nsysu_drone_description launch_drone.py \
 
 Stage 5 also uses `playground.world`, because the environment generates its own
 cones. Stage 5A generates one midpoint cone. Stage 5B generates `2-10` random
-cones in the corridor `x in [0, 10]`, `y in [-3, 3]`.
+cones in the middle corridor `x in [2, 8]`, `y in [-2, 2]`. This keeps the
+obstacles between the start and target instead of scattering them around the
+edge of the mission area.
 
 ## Training Defaults
 

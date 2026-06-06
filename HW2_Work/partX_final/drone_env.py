@@ -61,6 +61,10 @@ STAGE5_CORRIDOR_X_MIN = 0.0
 STAGE5_CORRIDOR_X_MAX = 10.0
 STAGE5_CORRIDOR_Y_MIN = -3.0
 STAGE5_CORRIDOR_Y_MAX = 3.0
+STAGE5B_CONE_X_MIN = 2.0
+STAGE5B_CONE_X_MAX = 8.0
+STAGE5B_CONE_Y_MIN = -2.0
+STAGE5B_CONE_Y_MAX = 2.0
 STAGE5B_TARGET_Z = 1.0
 STAGE5_CONE_Z = 0.05
 STAGE5B_MIN_CONES = 2
@@ -870,8 +874,8 @@ class DroneCurriculumEnv(gym.Env):
                 break
             candidate = np.array(
                 [
-                    random.uniform(STAGE5_CORRIDOR_X_MIN, STAGE5_CORRIDOR_X_MAX),
-                    random.uniform(STAGE5_CORRIDOR_Y_MIN, STAGE5_CORRIDOR_Y_MAX),
+                    random.uniform(STAGE5B_CONE_X_MIN, STAGE5B_CONE_X_MAX),
+                    random.uniform(STAGE5B_CONE_Y_MIN, STAGE5B_CONE_Y_MAX),
                     STAGE5_CONE_Z,
                 ],
                 dtype=np.float32,
