@@ -45,6 +45,13 @@ SONAR_SECTORS = (
     "side_right",
 )
 SONAR_COUNT = len(SONAR_SECTORS)
+# Observation layout:
+#   12 navigation fields
+#   7 current sonar ranges
+#   7 current sonar risk values
+#   7 previous sonar ranges
+#   7 sonar trend values
+#   1 sonar-enabled flag
 OBSERVATION_DIM = 12 + (4 * SONAR_COUNT) + 1
 TARGET_MARKER_NAME = "part3_rl_target_marker"
 STAGE5_FINAL_GOAL = np.array([10.0, 0.0, 1.0], dtype=np.float32)
@@ -101,8 +108,8 @@ GENERATED_CONE_SDF = """
 </sdf>
 """
 
-# build the ball marker in the world 
 def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> str:
+    """Build the Gazebo SDF string for a colored target ball."""
     emissive = (
         color[0] * TARGET_MARKER_EMISSIVE_SCALE,
         color[1] * TARGET_MARKER_EMISSIVE_SCALE,
@@ -117,9 +124,16 @@ def target_marker_sdf(name: str, color: tuple[float, float, float, float]) -> st
     )
 
 
-# Environment Stage configuration specification 
 @dataclass(frozen=True)
 class StageSpec:
+    """Static curriculum settings for one stage/variant.
+
+    fixed_targets is the default target list. Optional x/y/z bounds replace
+    only the axes that should be randomized for that stage. The focus field is
+    used by the reward helpers so earlier stages emphasize the single skill the
+    agent is supposed to learn first.
+    """
+
     name: str
     description: str
     fixed_targets: tuple[tuple[float, float, float], ...]
@@ -132,6 +146,7 @@ class StageSpec:
 
 
 STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
+    # Stage 1: learn altitude control before asking the policy to translate.
     (1, "A"): StageSpec(
         name="stage1A_fixed_vertical",
         description="fixed altitude target on Gazebo z",
@@ -145,6 +160,7 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         z_bounds=(0.8, 1.5),
         focus="vertical",
     ),
+    # Stage 2: learn forward/backward x movement while keeping altitude stable.
     (2, "A"): StageSpec(
         name="stage2A_fixed_horizontal",
         description="fixed x target with stable altitude",
@@ -158,6 +174,7 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         x_bounds=(-1.0, 1.5),
         focus="horizontal",
     ),
+    # Stage 3: add y-axis lateral movement from the Part 3+Y fork.
     (3, "A"): StageSpec(
         name="stage3A_fixed_lateral",
         description="fixed sideway y target with stable altitude",
@@ -171,6 +188,7 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         y_bounds=(-1.0, 1.0),
         focus="lateral",
     ),
+    # Stage 4: combine x/y/z target reaching without obstacle avoidance.
     (4, "A"): StageSpec(
         name="stage4A_random_xyz",
         description="single random x/y/z target without sonar",
@@ -190,6 +208,8 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
         sequence_count=3,
         focus="combined",
     ),
+    # Stage 5: keep the same action/observation interface, but unmask sonar and
+    # train the final obstacle-avoidance task.
     (5, "A"): StageSpec(
         name="stage5_single_obstacle",
         description="long-goal single-obstacle sonar avoidance with dynamic local subgoal",
@@ -231,6 +251,9 @@ class DroneRosBridge(Node):
     def __init__(self, namespace: str = "/simple_drone") -> None:
         super().__init__("part3_drone_curriculum_env")
         ns = namespace.rstrip("/")
+        # The Gym environment reads these latest cached sensor values after
+        # every control step. ROS callbacks update them asynchronously during
+        # rclpy.spin_once().
         self.pose: np.ndarray | None = None
         self.velocity = np.zeros(3, dtype=np.float32)
         self.down_sonar_range: float | None = None
@@ -251,6 +274,8 @@ class DroneRosBridge(Node):
         self.target_marker_warning_logged = False
         self.reset_world_warning_logged = False
 
+        # The action vector maps directly to /cmd_vel linear x/y/z. No angular
+        # command is sent because this homework controls translational motion.
         self.cmd_pub = self.create_publisher(Twist, f"{ns}/cmd_vel", 10)
         self.takeoff_pub = self.create_publisher(Empty, f"{ns}/takeoff", 10)
         self.land_pub = self.create_publisher(Empty, f"{ns}/land", 10)
@@ -283,6 +308,8 @@ class DroneRosBridge(Node):
         self.down_sonar_range = float(msg.range)
 
     def _front_cb(self, sector: str):
+        # Return a tiny sector-specific callback so each Range topic can update
+        # the matching entry while sharing the same sanitizing logic later.
         def callback(msg: Range) -> None:
             self.sonar_min_range = float(msg.min_range)
             self.sonar_max_range = float(msg.max_range)
@@ -291,6 +318,8 @@ class DroneRosBridge(Node):
         return callback
 
     def _side_cb(self, sector: str):
+        # Side sonar is stored separately from the front fan but is merged into
+        # the fixed SONAR_SECTORS order before entering the observation vector.
         def callback(msg: Range) -> None:
             self.sonar_min_range = float(msg.min_range)
             self.sonar_max_range = float(msg.max_range)
@@ -309,6 +338,8 @@ class DroneRosBridge(Node):
         self.publish_velocity(np.zeros(3, dtype=np.float32))
 
     def reset_world(self) -> None:
+        # Gazebo reset is best effort. If the service is missing, the simple
+        # drone reset/land/takeoff sequence below still gives a usable episode.
         if not self.reset_world_client.wait_for_service(timeout_sec=0.5):
             if not self.reset_world_warning_logged:
                 self.get_logger().warning("/reset_world unavailable; using topic reset only")
@@ -320,6 +351,8 @@ class DroneRosBridge(Node):
     def reset_and_takeoff(self, takeoff_altitude: float = 0.5, timeout_sec: float = 12.0) -> bool:
         self.stop()
         self.reset_world()
+        # Clear cached state so the next episode waits for fresh Gazebo/ROS
+        # messages instead of accidentally using the previous episode's pose.
         self.pose = None
         self.down_sonar_range = None
         for key in self.front_sonar_ranges:
@@ -327,10 +360,14 @@ class DroneRosBridge(Node):
         for key in self.side_sonar_ranges:
             self.side_sonar_ranges[key] = None
 
+        # Publish several reset messages because the simulator may miss a single
+        # topic message while Gazebo plugins are still recovering.
         for _ in range(3):
             self.reset_pub.publish(Empty())
             rclpy.spin_once(self, timeout_sec=0.2)
 
+        # A short land phase helps force the simple_drone plugin back into a
+        # grounded state before the new takeoff command starts.
         land_deadline = time.monotonic() + 1.3
         while time.monotonic() < land_deadline:
             self.land_pub.publish(Empty())
@@ -340,6 +377,8 @@ class DroneRosBridge(Node):
             self.reset_pub.publish(Empty())
             rclpy.spin_once(self, timeout_sec=0.2)
 
+        # Keep sending takeoff until the reported z height reaches the requested
+        # altitude. This is more reliable than publishing takeoff only once.
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
             self.takeoff_pub.publish(Empty())
@@ -367,6 +406,8 @@ class DroneRosBridge(Node):
     def clear_target_markers(self) -> None:
         if not self.target_marker_enabled:
             return
+        # Delete both remembered marker names and possible stale names from
+        # older runs, otherwise Gazebo can keep old balls in the world.
         names = set(self.target_marker_names)
         names.add(TARGET_MARKER_NAME)
         for index in range(4):
@@ -384,6 +425,8 @@ class DroneRosBridge(Node):
         self.clear_target_markers()
         target_count = len(targets)
         for index, target in enumerate(targets):
+            # Multi-target Stage 4B gets different colors so it is clear which
+            # waypoint order the policy is trying to follow.
             marker_name = self._target_marker_name(index, target_count)
             color = TARGET_MARKER_COLORS[index % len(TARGET_MARKER_COLORS)]
             if target_count == 2 and index == 1:
@@ -416,6 +459,8 @@ class DroneRosBridge(Node):
             return
         if not self.spawn_entity_client.wait_for_service(timeout_sec=0.5):
             return
+        # Variant B generates exactly one obstacle per reset. Clearing first
+        # prevents old generated cones from accumulating between episodes.
         self.clear_generated_obstacle()
         req = SpawnEntity.Request()
         req.name = GENERATED_OBSTACLE_NAME
@@ -468,15 +513,22 @@ class DroneCurriculumEnv(gym.Env):
         self.action_smoothness_penalty = float(action_smoothness_penalty)
         self.ros = DroneRosBridge(namespace=namespace)
 
+        # Stage 5 has a 10 m mission goal, so it needs a wider xy safety box
+        # than the earlier short-distance curriculum stages.
         self.xy_limit = 12.0 if self.stage >= 5 else 8.0
         self.max_altitude = 5.0
         self.min_altitude = 0.25
         self.takeoff_altitude = 0.5
+        # Sonar distances below caution_distance become a smooth risk penalty.
+        # Distances below unsafe_distance terminate the episode as a collision
+        # or near-collision.
         self.max_sonar_range = 10.0
         self.sonar_caution_distance = 1.5
         self.sonar_unsafe_distance = 0.25
         self.near_miss_distance = 0.5
 
+        # Episode state. The previous_* fields are reward baselines; they let
+        # each step reward improvement instead of only rewarding the final goal.
         self.targets = np.zeros((1, 3), dtype=np.float32)
         self.target_index = 0
         self.step_count = 0
@@ -488,10 +540,15 @@ class DroneCurriculumEnv(gym.Env):
         self.last_info: dict[str, Any] = {}
         self.last_action_was_filtered = False
         self.targets_reached = 0
+        # Later stages can require the drone to be inside the goal while moving
+        # slowly. The current setting of 1 keeps success permissive but still
+        # routes Stage 5 through the stability check.
         self.stable_success_steps = 0
         self.stable_success_required = 1
         self.stable_success_velocity = 0.35
 
+        # Action is desired linear velocity in Gazebo/world x, y, z. z is
+        # capped lower because vertical motion is more sensitive in this drone.
         self.action_space = spaces.Box(
             low=np.array([-1.0, -1.0, -0.5], dtype=np.float32),
             high=np.array([1.0, 1.0, 0.5], dtype=np.float32),
@@ -527,6 +584,8 @@ class DroneCurriculumEnv(gym.Env):
         super().reset(seed=seed)
         if options and "target" in options:
             self.target_override = tuple(float(v) for v in options["target"])
+        # Sample the target list first so markers, reward baselines, and info
+        # fields all describe the same episode.
         self.targets = self._sample_targets()
         self.target_index = 0
         self.targets_reached = 0
@@ -539,6 +598,9 @@ class DroneCurriculumEnv(gym.Env):
         self.last_action_was_filtered = False
         self.stable_success_steps = 0
 
+        # Reset/takeoff sometimes fails transiently in Gazebo. Retrying here is
+        # cheaper than aborting a long training run because one episode started
+        # before the simulator settled.
         takeoff_ok = False
         for attempt in range(3):
             takeoff_ok = self.ros.reset_and_takeoff(self.takeoff_altitude)
@@ -552,6 +614,8 @@ class DroneCurriculumEnv(gym.Env):
         self._update_stage_obstacle()
         obs = self._get_obs()
         self._update_stage_markers(force=True)
+        # Initialize progress baselines after the first observation so step()
+        # does not count reset motion as policy progress.
         self.previous_distance = float(self.last_info["distance_to_target"])
         self.previous_final_distance = float(self.last_info["mission_goal_distance"])
         self.previous_abs_error = self._abs_error()
@@ -559,6 +623,8 @@ class DroneCurriculumEnv(gym.Env):
         return obs, self._info("running")
 
     def step(self, action: np.ndarray):
+        # Gym gives raw policy output. Clip it before publishing so the ROS
+        # command always stays inside the declared action_space contract.
         action = np.asarray(action, dtype=np.float32)
         action = np.clip(action, self.action_space.low, self.action_space.high)
         # The safety filter only blocks clearly unsafe commands. The policy is
@@ -586,7 +652,9 @@ class DroneCurriculumEnv(gym.Env):
         target_reached = self._target_reached(x_error, y_error, z_error, distance, velocity_norm)
 
         reward = 0.0
-        # Dense progress reward: positive when the active target gets closer.
+        # Dense progress reward: positive when the active target gets closer and
+        # negative when it moves away. The gain is lower very near the target so
+        # the policy does not learn to overshoot just to collect progress.
         if self.previous_distance is not None and math.isfinite(distance):
             scale = 10.0 if distance >= 0.5 else 4.0
             reward += scale * (self.previous_distance - distance)
@@ -607,13 +675,19 @@ class DroneCurriculumEnv(gym.Env):
         self.previous_abs_error = current_abs_error.copy()
 
         # Small penalties discourage drifting, overspeed near the target, and
-        # sharp action changes that make Gazebo control unstable.
+        # sharp action changes that make Gazebo control unstable. These terms
+        # are intentionally smaller than success/crash rewards, so they shape
+        # the route without replacing the main task objective.
         reward -= 0.05 * distance
         reward -= self._stage_precision_penalty(x_error, y_error, z_error)
         if distance < 0.6:
             reward -= 0.18 * velocity_norm
             reward -= self.near_target_action_penalty * float(np.linalg.norm(filtered_action))
         if distance < 0.45:
+            # Once inside the close target region, split velocity into radial
+            # and tangential parts. This catches two bad behaviors:
+            #   1. circling around the ball
+            #   2. flying through the ball instead of settling
             reward -= self._near_target_motion_penalty(
                 distance=distance,
                 target_vector=np.array([dx, dy, dz], dtype=np.float32),
@@ -630,6 +704,8 @@ class DroneCurriculumEnv(gym.Env):
         min_obstacle = float(info["min_obstacle_sonar_range"])
         if self.sonar_enabled:
             # Sonar risk is zero in free space and approaches one near obstacles.
+            # mean risk discourages staying in generally crowded space, while
+            # max risk reacts strongly to the closest detected obstacle.
             reward -= 2.0 * obstacle_mean_risk**2
             reward -= 4.0 * obstacle_max_risk**2
             if self.stage == 5 and obstacle_max_risk > 0.2 and abs(float(info["vx"])) < 0.05:
@@ -638,6 +714,9 @@ class DroneCurriculumEnv(gym.Env):
         terminated = False
         truncated = False
         status = "running"
+        # Terminal checks are ordered from sensor/safety failures to successful
+        # completion. Safety failures use large penalties so PPO learns them as
+        # hard constraints, not minor route preferences.
         if not np.all(np.isfinite(obs)):
             reward -= 100.0
             terminated = True
@@ -691,10 +770,14 @@ class DroneCurriculumEnv(gym.Env):
             rclpy.shutdown()
 
     def _sample_targets(self) -> np.ndarray:
+        # target_override is used by evaluation scripts to replay a specific
+        # target instead of sampling a new random one.
         if self.target_override is not None:
             return np.array([self.target_override], dtype=np.float32)
         if self.stage == 5:
             if self.variant == "B":
+                # Variant B keeps the mission length constant but randomizes the
+                # direction. This tests obstacle avoidance beyond a single path.
                 angle = random.uniform(-math.pi, math.pi)
                 return np.array(
                     [
@@ -708,6 +791,8 @@ class DroneCurriculumEnv(gym.Env):
                 )
             return np.array([STAGE5_FINAL_GOAL], dtype=np.float32)
         if self.stage_spec.sequence_count > 1:
+            # Stage 4B is a waypoint sequence. All targets are sampled at reset
+            # so the policy can observe total_targets and target_progress.
             targets = [self._sample_one_target(index) for index in range(self.stage_spec.sequence_count)]
             return np.array(targets, dtype=np.float32)
         return np.array([self._sample_one_target(0)], dtype=np.float32)
@@ -715,6 +800,8 @@ class DroneCurriculumEnv(gym.Env):
     def _stage5_local_target(self) -> np.ndarray:
         mission_goal = self.mission_goal
         if self.ros.pose is None:
+            # Before the first pose message arrives, approximate the local goal
+            # from the origin so observation construction can still run.
             direction = mission_goal.copy()
             direction[2] = 0.0
             norm = float(np.linalg.norm(direction[:2]))
@@ -733,6 +820,8 @@ class DroneCurriculumEnv(gym.Env):
 
     def _update_stage_obstacle(self) -> None:
         if self.stage == 5 and self.variant == "B" and self.ros.pose is not None:
+            # The generated cone is placed halfway between takeoff position and
+            # mission goal, forcing the sonar policy to react on that route.
             midpoint = (self.ros.pose + self.mission_goal) / 2.0
             midpoint[2] = 0.05
             self.ros.spawn_generated_cone(midpoint)
@@ -748,6 +837,9 @@ class DroneCurriculumEnv(gym.Env):
             self.ros.update_target_markers(self.targets)
 
     def _sample_one_target(self, index: int) -> tuple[float, float, float]:
+        # If no random bounds are configured, use the fixed target. For sequence
+        # stages, clamp the fixed target index so short fixed_targets lists are
+        # still valid.
         if (
             self.stage_spec.x_bounds is None
             and self.stage_spec.y_bounds is None
@@ -756,12 +848,16 @@ class DroneCurriculumEnv(gym.Env):
             fixed = self.stage_spec.fixed_targets[min(index, len(self.stage_spec.fixed_targets) - 1)]
             return tuple(float(v) for v in fixed)
         base = self.stage_spec.fixed_targets[0]
+        # Only axes with bounds are randomized; the other coordinates stay at
+        # the base target so each curriculum stage isolates one new skill.
         x = random.uniform(*self.stage_spec.x_bounds) if self.stage_spec.x_bounds else base[0]
         y = random.uniform(*self.stage_spec.y_bounds) if self.stage_spec.y_bounds else base[1]
         z = random.uniform(*self.stage_spec.z_bounds) if self.stage_spec.z_bounds else base[2]
         return (float(x), float(y), float(z))
 
     def _axis_progress_reward(self, delta: np.ndarray) -> float:
+        # delta is previous_abs_error - current_abs_error. A positive value means
+        # that axis improved on this step. Weights match the stage focus.
         if self.stage_spec.focus == "vertical":
             weights = np.array([2.0, 2.0, 12.0], dtype=np.float32)
         elif self.stage_spec.focus == "horizontal":
@@ -773,6 +869,8 @@ class DroneCurriculumEnv(gym.Env):
         return float(np.dot(weights, delta))
 
     def _stage_precision_penalty(self, x_error: float, y_error: float, z_error: float) -> float:
+        # This is the distance penalty split by axis. The focused axis gets the
+        # strongest pressure, while non-focused axes still prevent sloppy drift.
         if self.stage_spec.focus == "vertical":
             return 0.45 * x_error + 0.45 * y_error + 0.65 * z_error
         if self.stage_spec.focus == "horizontal":
@@ -788,17 +886,30 @@ class DroneCurriculumEnv(gym.Env):
         velocity: np.ndarray,
     ) -> float:
         """Penalize orbiting and fly-through behavior near the active target."""
+        # Bad or zero-length geometry cannot produce a meaningful direction
+        # vector, so return no extra penalty instead of creating NaN rewards.
         if distance <= 1e-6 or not math.isfinite(distance):
             return 0.0
         if not np.all(np.isfinite(target_vector)) or not np.all(np.isfinite(velocity)):
             return 0.0
 
+        # direction_to_target points from the drone toward the target. Projecting
+        # velocity onto this unit vector gives radial_speed:
+        #   positive: moving toward the target
+        #   near zero: sliding sideways around the target
+        #   negative: moving away after passing/overshooting the target
         direction_to_target = target_vector / max(distance, 1e-6)
         radial_speed = float(np.dot(velocity, direction_to_target))
+        # The leftover velocity after removing the radial component is sideways
+        # motion around the target, which is the circling behavior we want to
+        # discourage near the goal.
         tangential_velocity = velocity - radial_speed * direction_to_target
         tangential_speed = float(np.linalg.norm(tangential_velocity))
         total_speed = float(np.linalg.norm(velocity))
 
+        # Always penalize sideways/fast motion near the target. Add an extra
+        # penalty only when radial_speed is negative enough to show fly-through
+        # or retreat from the target.
         penalty = 0.18 * tangential_speed + 0.10 * total_speed
         if radial_speed < -0.03:
             penalty += 0.25 * abs(radial_speed)
@@ -813,9 +924,13 @@ class DroneCurriculumEnv(gym.Env):
         velocity_norm: float,
     ) -> bool:
         if self.stage == 5 and self.ros.pose is not None:
+            # Stage 5 observes a moving local target, but success is the final
+            # mission goal. Otherwise the drone could "succeed" at a subgoal.
             reached = float(np.linalg.norm(self.mission_goal - self.ros.pose)) < self.success_distance
             return self._stable_target_reached(reached, velocity_norm)
         if self.stage_spec.focus == "vertical":
+            # Stage 1 mainly checks z error but also limits lateral drift so the
+            # policy cannot pass altitude training while far from the origin.
             lateral_error = math.hypot(x_error, y_error)
             lateral_tolerance = max(0.20, 1.5 * self.success_distance)
             return z_error < self.success_distance and lateral_error < lateral_tolerance
@@ -827,6 +942,8 @@ class DroneCurriculumEnv(gym.Env):
         return reached
 
     def _stable_target_reached(self, reached: bool, velocity_norm: float) -> bool:
+        # Require the drone to be both inside the target ball and slow enough.
+        # This avoids counting high-speed fly-through as a clean arrival.
         if reached and velocity_norm <= self.stable_success_velocity:
             self.stable_success_steps += 1
         else:
@@ -834,6 +951,8 @@ class DroneCurriculumEnv(gym.Env):
         return self.stable_success_steps >= self.stable_success_required
 
     def _wait_for_state(self, timeout_sec: float = 5.0, min_altitude: float | None = None) -> None:
+        # Spin ROS until a pose arrives. reset() uses min_altitude so it waits
+        # for actual takeoff instead of only seeing a ground-level pose.
         deadline = time.monotonic() + timeout_sec
         while time.monotonic() < deadline:
             rclpy.spin_once(self.ros, timeout_sec=0.1)
@@ -853,6 +972,8 @@ class DroneCurriculumEnv(gym.Env):
             rclpy.spin_once(self.ros, timeout_sec=min(0.02, remaining))
 
     def _get_obs(self) -> np.ndarray:
+        # Pose, velocity, target delta, sonar, and progress are folded into one
+        # fixed-size vector so PPO checkpoints can be reused across stages.
         pose = self.ros.pose
         if pose is None:
             pose = np.full(3, np.nan, dtype=np.float32)
@@ -865,10 +986,15 @@ class DroneCurriculumEnv(gym.Env):
         sonar_norm = np.clip(sonar / self.max_sonar_range, 0.0, 1.0).astype(np.float32)
         prev_sonar_norm = np.clip(self.previous_sonar / self.max_sonar_range, 0.0, 1.0)
         if self.sonar_enabled:
+            # Trend is positive when the normalized range shrinks, meaning an
+            # obstacle is getting closer compared with the previous step.
             sonar_risk = self._ranges_to_risk(sonar)
             sonar_trend = prev_sonar_norm - sonar_norm
             sonar_enabled = 1.0
         else:
+            # Keep sonar channels present but masked before Stage 5. This avoids
+            # changing the observation shape while preventing early stages from
+            # learning noise from irrelevant obstacle sensors.
             sonar_norm = np.ones(SONAR_COUNT, dtype=np.float32)
             prev_sonar_norm = np.ones(SONAR_COUNT, dtype=np.float32)
             sonar_risk = np.zeros(SONAR_COUNT, dtype=np.float32)
@@ -925,6 +1051,9 @@ class DroneCurriculumEnv(gym.Env):
             float(np.linalg.norm(mission_delta)) if np.all(np.isfinite(mission_delta)) else math.nan
         )
         self.last_info = {
+            # last_info feeds logs, evaluation CSVs, reward calculations, and
+            # Gym info output. Keep names stable so existing scripts keep
+            # working.
             "x": float(pose[0]),
             "y": float(pose[1]),
             "z": float(pose[2]),
@@ -958,12 +1087,15 @@ class DroneCurriculumEnv(gym.Env):
         return np.abs(self.current_target - self.ros.pose).astype(np.float32)
 
     def _safe_sonar(self, raw: float | None) -> float:
+        # Missing or invalid sonar means "no obstacle seen" instead of NaN. This
+        # keeps training running during brief ROS sensor dropouts.
         max_range = max(min(self.ros.sonar_max_range, self.max_sonar_range), 0.1)
         if raw is None or not math.isfinite(raw):
             return max_range
         return float(np.clip(raw, self.ros.sonar_min_range, max_range))
 
     def _safe_sonar_ranges(self) -> np.ndarray:
+        # The order must match SONAR_SECTORS and the observation layout.
         return np.array(
             [
                 self._safe_sonar(self.ros.front_sonar_ranges["left"]),
@@ -978,6 +1110,8 @@ class DroneCurriculumEnv(gym.Env):
         )
 
     def _ranges_to_risk(self, ranges: np.ndarray) -> np.ndarray:
+        # Convert meters into a bounded risk score. At caution_distance or
+        # farther risk is 0; as range approaches 0, risk approaches 1.
         risk = (self.sonar_caution_distance - ranges) / self.sonar_caution_distance
         return np.clip(risk, 0.0, 1.0).astype(np.float32)
 
@@ -1003,6 +1137,8 @@ class DroneCurriculumEnv(gym.Env):
         return np.clip(filtered, self.action_space.low, self.action_space.high), was_filtered
 
     def _log_position(self, force: bool = False) -> None:
+        # Optional lightweight console trace for debugging a live Gazebo run.
+        # It is disabled by default to avoid slowing down training logs.
         if not force and (
             self.log_position_every <= 0
             or self.step_count % self.log_position_every != 0
@@ -1025,6 +1161,8 @@ class DroneCurriculumEnv(gym.Env):
         )
 
     def _info(self, status: str) -> dict[str, Any]:
+        # Gymnasium expects info to be a plain dict. Convert numpy scalar values
+        # to Python floats so CSV/json logging does not need special handling.
         info = dict(self.last_info)
         info.update(
             {
