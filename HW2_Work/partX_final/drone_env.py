@@ -212,7 +212,7 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
     # train the final obstacle-avoidance task.
     (5, "A"): StageSpec(
         name="stage5_single_obstacle",
-        description="long-goal single-obstacle sonar avoidance with dynamic local subgoal",
+        description="fixed long-goal sonar mission with generated midpoint cone",
         fixed_targets=((10.0, 0.0, 1.0),),
         sonar_enabled=True,
         focus="obstacle",
@@ -819,9 +819,10 @@ class DroneCurriculumEnv(gym.Env):
         return (pose + vector / distance * STAGE5_LOCAL_GOAL_STEP).astype(np.float32)
 
     def _update_stage_obstacle(self) -> None:
-        if self.stage == 5 and self.variant == "B" and self.ros.pose is not None:
-            # The generated cone is placed halfway between takeoff position and
-            # mission goal, forcing the sonar policy to react on that route.
+        if self.stage == 5 and self.ros.pose is not None:
+            # Stage 5 now uses playground.world for both variants and lets the
+            # environment create the obstacle. Variant A uses the fixed mission
+            # goal, while Variant B uses its random radius-10 mission goal.
             midpoint = (self.ros.pose + self.mission_goal) / 2.0
             midpoint[2] = 0.05
             self.ros.spawn_generated_cone(midpoint)
