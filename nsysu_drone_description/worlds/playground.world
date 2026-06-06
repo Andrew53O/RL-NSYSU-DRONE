@@ -138,16 +138,6 @@
       <real_time>759 50621413</real_time>
       <wall_time>1679850083 371269079</wall_time>
       <iterations>744281</iterations>
-      <model name='Construction Cone'>
-        <pose>3.44074 0.667633 0.049998 0 -2e-06 -0.004192</pose>
-        <scale>1 1 1</scale>
-        <link name='link'>
-          <pose>3.44074 0.667633 0.049998 0 -2e-06 -0.004192</pose>
-          <velocity>0 0 0 0 -0 0</velocity>
-          <acceleration>0 0 -9.8 0 -0 0</acceleration>
-          <wrench>0 0 -9.8 0 -0 0</wrench>
-        </link>
-      </model>
       <model name='Dumpster'>
         <pose>1.10581 -9.13614 0.051381 -1.1e-05 3e-06 -3.13677</pose>
         <scale>1 1 1</scale>
@@ -855,55 +845,6 @@
         <kinematic>0</kinematic>
       </link>
       <pose>0.044032 9.47148 0 0 -0 0</pose>
-    </model>
-    <model name='Construction Cone'>
-      <link name='link'>
-        <collision name='collision'>
-          <geometry>
-            <mesh>
-              <scale>10 10 10</scale>
-              <uri>model://construction_cone/meshes/construction_cone.dae</uri>
-            </mesh>
-          </geometry>
-          <max_contacts>10</max_contacts>
-          <surface>
-            <contact>
-              <ode/>
-            </contact>
-            <bounce/>
-            <friction>
-              <torsional>
-                <ode/>
-              </torsional>
-              <ode/>
-            </friction>
-          </surface>
-        </collision>
-        <visual name='visual'>
-          <geometry>
-            <mesh>
-              <scale>10 10 10</scale>
-              <uri>model://construction_cone/meshes/construction_cone.dae</uri>
-            </mesh>
-          </geometry>
-        </visual>
-        <self_collide>0</self_collide>
-        <inertial>
-          <pose>0 0 0 0 -0 0</pose>
-          <inertia>
-            <ixx>1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>1</iyy>
-            <iyz>0</iyz>
-            <izz>1</izz>
-          </inertia>
-          <mass>1</mass>
-        </inertial>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-      <pose>3.43124 0.676079 0 0 -0 0</pose>
     </model>
     <model name='Dumpster'>
       <link name='link'>
