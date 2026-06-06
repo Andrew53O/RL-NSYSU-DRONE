@@ -155,91 +155,393 @@ Run from this folder inside the Docker container:
 cd /workspace/HW2_Work/partX_final
 ```
 
-Stage 1A:
+Stage 1A train:
 
 ```bash
-python3 train.py --stage 1 --variant A
+python3 train.py \
+  --stage 1 \
+  --variant A \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 1B:
+Stage 1A test:
+
+```bash
+python3 test.py \
+  --stage 1 \
+  --variant A \
+  --model models/stage1/variantA/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 1B train:
 
 ```bash
 python3 train.py \
   --stage 1 \
   --variant B \
-  --resume-from models/stage1/variantA/run001/best/best_average_model.zip
+  --resume-from models/stage1/variantA/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 2A:
+Stage 1B test:
+
+```bash
+python3 test.py \
+  --stage 1 \
+  --variant B \
+  --model models/stage1/variantB/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 2A train:
 
 ```bash
 python3 train.py \
   --stage 2 \
   --variant A \
-  --resume-from models/stage1/variantB/run001/best/best_average_model.zip
+  --resume-from models/stage1/variantB/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 2B:
+Stage 2A test:
+
+```bash
+python3 test.py \
+  --stage 2 \
+  --variant A \
+  --model models/stage2/variantA/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 2B train:
 
 ```bash
 python3 train.py \
   --stage 2 \
   --variant B \
-  --resume-from models/stage2/variantA/run001/best/best_average_model.zip
+  --resume-from models/stage2/variantA/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 3A:
+Stage 2B test:
+
+```bash
+python3 test.py \
+  --stage 2 \
+  --variant B \
+  --model models/stage2/variantB/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 3A train:
 
 ```bash
 python3 train.py \
   --stage 3 \
   --variant A \
-  --resume-from models/stage2/variantB/run001/best/best_average_model.zip
+  --resume-from models/stage2/variantB/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 3B:
+Stage 3A test:
+
+```bash
+python3 test.py \
+  --stage 3 \
+  --variant A \
+  --model models/stage3/variantA/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 3B train:
 
 ```bash
 python3 train.py \
   --stage 3 \
   --variant B \
-  --resume-from models/stage3/variantA/run001/best/best_average_model.zip
+  --resume-from models/stage3/variantA/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 4A:
+Stage 3B test:
+
+```bash
+python3 test.py \
+  --stage 3 \
+  --variant B \
+  --model models/stage3/variantB/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 4A train:
 
 ```bash
 python3 train.py \
   --stage 4 \
   --variant A \
-  --resume-from models/stage3/variantB/run001/best/best_average_model.zip
+  --resume-from models/stage3/variantB/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 4B:
+Stage 4A test:
+
+```bash
+python3 test.py \
+  --stage 4 \
+  --variant A \
+  --model models/stage4/variantA/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 4B train:
 
 ```bash
 python3 train.py \
   --stage 4 \
   --variant B \
-  --resume-from models/stage4/variantA/run001/best/best_average_model.zip
+  --resume-from models/stage4/variantA/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 5A:
+Stage 4B test:
+
+```bash
+python3 test.py \
+  --stage 4 \
+  --variant B \
+  --model models/stage4/variantB/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 5A train:
 
 ```bash
 python3 train.py \
   --stage 5 \
   --variant A \
-  --resume-from models/stage4/variantB/run001/best/best_average_model.zip
+  --resume-from models/stage4/variantB/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
 ```
 
-Stage 5B:
+Stage 5A test:
+
+```bash
+python3 test.py \
+  --stage 5 \
+  --variant A \
+  --model models/stage5/variantA/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
+```
+
+Stage 5B train:
 
 ```bash
 python3 train.py \
   --stage 5 \
   --variant B \
-  --resume-from models/stage5/variantA/run001/best/best_average_model.zip
+  --resume-from models/stage5/variantA/run001/best/best_average_model.zip \
+  --timesteps 50000 \
+  --success-distance 0.10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --learning-rate 3e-4 \
+  --n-steps 512 \
+  --batch-size 64 \
+  --gamma 0.99 \
+  --checkpoint-freq 10000 \
+  --best-window 20 \
+  --plateau-window 30 \
+  --plateau-patience 30 \
+  --plateau-min-delta 1.0 \
+  --near-target-action-penalty 0.3 \
+  --action-penalty 0.03 \
+  --action-smoothness-penalty 0.09
+```
+
+Stage 5B test:
+
+```bash
+python3 test.py \
+  --stage 5 \
+  --variant B \
+  --model models/stage5/variantB/run001/best/best_average_model.zip \
+  --success-distance 0.10 \
+  --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
+  --log-position-every 25
 ```
 
 If you rerun a stage, adjust the `runXXX` part to the actual previous run.
@@ -255,6 +557,8 @@ python3 test.py \
   --model models/stage4/variantA/run001/best/best_average_model.zip \
   --success-distance 0.10 \
   --episodes 10 \
+  --max-steps 800 \
+  --step-dt 0.05 \
   --log-position-every 25
 ```
 
