@@ -194,25 +194,36 @@ def write_config(path: Path, args: argparse.Namespace, csv_path: Path) -> None:
         fp.write("\n")
 
 
-def print_summary(rows: list[dict[str, float | int | str]]) -> None:
+def summary_lines(rows: list[dict[str, float | int | str]]) -> list[str]:
     total = len(rows)
     success_rows = [row for row in rows if row["status"] == "success"]
     timeout_rows = [row for row in rows if row["status"] == "timeout"]
     unsafe_rows = [row for row in rows if row["status"] in {"crash", "unsafe_sonar", "out_of_bounds"}]
-    print(f"episodes: {total}")
-    print(f"success_rate: {len(success_rows) / total:.3f}")
-    print(f"timeout_rate: {len(timeout_rows) / total:.3f}")
-    print(f"crash_or_unsafe_rate: {len(unsafe_rows) / total:.3f}")
-    print(f"average_return: {mean(float(row['episode_return']) for row in rows):.3f}")
-    print(f"average_distance_to_target: {mean(float(row['final_distance_to_target']) for row in rows):.3f}")
-    print(f"average_mission_goal_distance: {mean(float(row['mission_goal_distance']) for row in rows):.3f}")
-    print(f"average_steps_to_target: {mean(float(row['steps']) for row in success_rows) if success_rows else 0.0:.3f}")
-    print(f"average_sequence_completion_rate: {mean(float(row['sequence_completion_rate']) for row in rows):.3f}")
-    print(f"average_cmd_vx: {mean(float(row['average_cmd_vx']) for row in rows):.3f}")
-    print(f"average_cmd_vy: {mean(float(row['average_cmd_vy']) for row in rows):.3f}")
-    print(f"average_cmd_vz: {mean(float(row['average_cmd_vz']) for row in rows):.3f}")
-    print(f"safety_filter_activation_count: {sum(int(row['safety_filter_overrides']) for row in rows)}")
-    print(f"sonar_near_miss_count: {sum(int(row['sonar_near_miss_count']) for row in rows)}")
+    return [
+        f"episodes: {total}",
+        f"success_rate: {len(success_rows) / total:.3f}",
+        f"timeout_rate: {len(timeout_rows) / total:.3f}",
+        f"crash_or_unsafe_rate: {len(unsafe_rows) / total:.3f}",
+        f"average_return: {mean(float(row['episode_return']) for row in rows):.3f}",
+        f"average_distance_to_target: {mean(float(row['final_distance_to_target']) for row in rows):.3f}",
+        f"average_mission_goal_distance: {mean(float(row['mission_goal_distance']) for row in rows):.3f}",
+        f"average_steps_to_target: {mean(float(row['steps']) for row in success_rows) if success_rows else 0.0:.3f}",
+        f"average_sequence_completion_rate: {mean(float(row['sequence_completion_rate']) for row in rows):.3f}",
+        f"average_cmd_vx: {mean(float(row['average_cmd_vx']) for row in rows):.3f}",
+        f"average_cmd_vy: {mean(float(row['average_cmd_vy']) for row in rows):.3f}",
+        f"average_cmd_vz: {mean(float(row['average_cmd_vz']) for row in rows):.3f}",
+        f"safety_filter_activation_count: {sum(int(row['safety_filter_overrides']) for row in rows)}",
+        f"sonar_near_miss_count: {sum(int(row['sonar_near_miss_count']) for row in rows)}",
+    ]
+
+
+def print_summary(rows: list[dict[str, float | int | str]]) -> None:
+    for line in summary_lines(rows):
+        print(line)
+
+
+def write_summary(path: Path, rows: list[dict[str, float | int | str]]) -> None:
+    path.write_text("\n".join(summary_lines(rows)) + "\n")
 
 
 def main() -> None:
@@ -253,9 +264,12 @@ def main() -> None:
     write_csv(csv_path, rows)
     config_path = csv_path.with_name(f"{csv_path.stem}_config.json")
     write_config(config_path, args, csv_path)
+    summary_path = csv_path.parent / "summary.txt"
+    write_summary(summary_path, rows)
     print_summary(rows)
     print(f"saved_eval_csv: {csv_path}")
     print(f"saved_eval_config: {config_path}")
+    print(f"saved_eval_summary: {summary_path}")
 
 
 if __name__ == "__main__":

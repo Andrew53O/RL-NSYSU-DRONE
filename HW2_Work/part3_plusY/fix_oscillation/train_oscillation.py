@@ -262,6 +262,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--target", nargs=3, type=float, default=None)
     parser.add_argument("--log-position-every", type=int, default=0)
+    parser.add_argument(
+        "--near-target-action-penalty",
+        type=float,
+        default=0.3,
+        help="Extra action magnitude penalty when distance to target is below 0.6.",
+    )
+    parser.add_argument(
+        "--action-penalty",
+        type=float,
+        default=0.03,
+        help="Global action magnitude penalty.",
+    )
+    parser.add_argument(
+        "--action-smoothness-penalty",
+        type=float,
+        default=0.09,
+        help="Penalty for action change between consecutive steps.",
+    )
     return parser.parse_args()
 
 
@@ -363,6 +381,11 @@ def write_run_config(path: Path, args: argparse.Namespace, spec_name: str, run_n
             "patience": args.plateau_patience,
             "min_delta": args.plateau_min_delta,
         },
+        "reward_penalties": {
+            "near_target_action_penalty": args.near_target_action_penalty,
+            "action_penalty": args.action_penalty,
+            "action_smoothness_penalty": args.action_smoothness_penalty,
+        },
         "outputs": {"model_dir": str(model_dir), "log_dir": str(log_dir)},
         "notes": (
             "Anti-oscillation experiment: Stage 4/5 success requires a short stable arrival, "
@@ -378,6 +401,12 @@ def main() -> None:
     args = parse_args()
     if args.step_dt <= 0.0:
         raise SystemExit("--step-dt must be greater than 0.0")
+    if args.near_target_action_penalty < 0.0:
+        raise SystemExit("--near-target-action-penalty must be non-negative")
+    if args.action_penalty < 0.0:
+        raise SystemExit("--action-penalty must be non-negative")
+    if args.action_smoothness_penalty < 0.0:
+        raise SystemExit("--action-smoothness-penalty must be non-negative")
     if args.step_dt < 0.03:
         print(
             "Warning: --step-dt below 0.03 can make training fast but less stable in Gazebo. "
@@ -418,6 +447,9 @@ def main() -> None:
         success_distance=args.success_distance,
         step_dt=args.step_dt,
         log_position_every=args.log_position_every,
+        near_target_action_penalty=args.near_target_action_penalty,
+        action_penalty=args.action_penalty,
+        action_smoothness_penalty=args.action_smoothness_penalty,
     )
     env = Monitor(env, filename=str(monitor_path))
 

@@ -445,6 +445,9 @@ class DroneCurriculumEnv(gym.Env):
         namespace: str = "/simple_drone",
         step_dt: float = 0.1,
         log_position_every: int = 0,
+        near_target_action_penalty: float = 0.3,
+        action_penalty: float = 0.03,
+        action_smoothness_penalty: float = 0.09,
     ) -> None:
         super().__init__()
         self._owns_rclpy = False
@@ -460,6 +463,9 @@ class DroneCurriculumEnv(gym.Env):
         self.success_distance = float(success_distance)
         self.step_dt = float(step_dt)
         self.log_position_every = max(0, int(log_position_every))
+        self.near_target_action_penalty = float(near_target_action_penalty)
+        self.action_penalty = float(action_penalty)
+        self.action_smoothness_penalty = float(action_smoothness_penalty)
         self.ros = DroneRosBridge(namespace=namespace)
 
         self.xy_limit = 12.0 if self.stage >= 5 else 8.0
@@ -483,8 +489,8 @@ class DroneCurriculumEnv(gym.Env):
         self.last_action_was_filtered = False
         self.targets_reached = 0
         self.stable_success_steps = 0
-        self.stable_success_required = 3
-        self.stable_success_velocity = 0.22
+        self.stable_success_required = 1
+        self.stable_success_velocity = 0.35
 
         self.action_space = spaces.Box(
             low=np.array([-1.0, -1.0, -0.5], dtype=np.float32),
@@ -582,7 +588,7 @@ class DroneCurriculumEnv(gym.Env):
         reward = 0.0
         # Dense progress reward: positive when the active target gets closer.
         if self.previous_distance is not None and math.isfinite(distance):
-            scale = 10.0 if distance >= 0.5 else 18.0
+            scale = 10.0 if distance >= 0.5 else 4.0
             reward += scale * (self.previous_distance - distance)
         self.previous_distance = distance
 
@@ -606,15 +612,15 @@ class DroneCurriculumEnv(gym.Env):
         reward -= self._stage_precision_penalty(x_error, y_error, z_error)
         if distance < 0.6:
             reward -= 0.18 * velocity_norm
-            reward -= 0.10 * float(np.linalg.norm(filtered_action))
+            reward -= self.near_target_action_penalty * float(np.linalg.norm(filtered_action))
         if distance < 0.45:
             reward -= self._near_target_motion_penalty(
                 distance=distance,
                 target_vector=np.array([dx, dy, dz], dtype=np.float32),
                 velocity=self.ros.velocity,
             )
-        reward -= 0.01 * float(np.linalg.norm(filtered_action))
-        reward -= 0.02 * float(np.linalg.norm(filtered_action - self.previous_action))
+        reward -= self.action_penalty * float(np.linalg.norm(filtered_action))
+        reward -= self.action_smoothness_penalty * float(np.linalg.norm(filtered_action - self.previous_action))
         if was_filtered:
             reward -= 0.25
         self.previous_action = filtered_action.copy()
@@ -763,7 +769,7 @@ class DroneCurriculumEnv(gym.Env):
         elif self.stage_spec.focus == "lateral":
             weights = np.array([3.0, 12.0, 6.0], dtype=np.float32)
         else:
-            weights = np.array([9.0, 4.0, 7.0], dtype=np.float32)
+            weights = np.array([7.0, 7.0, 7.0], dtype=np.float32)
         return float(np.dot(weights, delta))
 
     def _stage_precision_penalty(self, x_error: float, y_error: float, z_error: float) -> float:
@@ -814,7 +820,9 @@ class DroneCurriculumEnv(gym.Env):
             lateral_tolerance = max(0.20, 1.5 * self.success_distance)
             return z_error < self.success_distance and lateral_error < lateral_tolerance
         reached = distance < self.success_distance
-        if self.stage >= 4:
+        if self.stage == 4:
+            return reached
+        if self.stage >= 5:
             return self._stable_target_reached(reached, velocity_norm)
         return reached
 
@@ -1004,13 +1012,15 @@ class DroneCurriculumEnv(gym.Env):
         if not info:
             return
         target = self.current_target
+        velocity_norm = float(np.linalg.norm(self.ros.velocity))
         print(
             "[pose] "
             f"step={self.step_count} "
             f"target_index={self.target_index + 1}/{len(self.targets)} "
             f"pos=({info['x']:.2f}, {info['y']:.2f}, {info['z']:.2f}) "
             f"target=({target[0]:.2f}, {target[1]:.2f}, {target[2]:.2f}) "
-            f"distance={info['distance_to_target']:.2f}",
+            f"distance={info['distance_to_target']:.2f} "
+            f"velocity={velocity_norm:.2f}",
             flush=True,
         )
 
