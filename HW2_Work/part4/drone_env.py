@@ -698,6 +698,8 @@ class DroneCurriculumEnv(gym.Env):
             return np.array(targets, dtype=np.float32)
         return np.array([self._sample_one_target(0)], dtype=np.float32)
 
+    
+    # Local subgoal, subgoal = (target - current) + 1.0 
     def _long_mission_local_target(self) -> np.ndarray:
         mission_goal = self.mission_goal
         if self.ros.pose is None:
@@ -766,13 +768,13 @@ class DroneCurriculumEnv(gym.Env):
             weights = np.array([9.0, 4.0, 7.0], dtype=np.float32)
         return float(np.dot(weights, delta))
 
-    def _stage_precision_penalty(self, x_error: float, y_error: float, z_error: float) -> float:
+    def _stage_precision_penalty(self, x_error, y_error, z_error):
         if self.stage_spec.focus == "vertical":
-            return 0.45 * x_error + 0.45 * y_error + 0.65 * z_error
+            return 1.5 * x_error + 1.5 * y_error + 0.8 * z_error
         if self.stage_spec.focus == "horizontal":
-            return 0.45 * x_error + 0.20 * y_error + 0.45 * z_error
+            return 0.8 * x_error + 1.2 * y_error + 1.2 * z_error
         if self.stage_spec.focus == "lateral":
-            return 0.30 * x_error + 0.55 * y_error + 0.45 * z_error
+            return 1.2 * x_error + 0.8 * y_error + 1.2 * z_error
         return 0.35 * x_error + 0.25 * y_error + 0.35 * z_error
 
     def _target_reached(self, x_error: float, y_error: float, z_error: float, distance: float) -> bool:

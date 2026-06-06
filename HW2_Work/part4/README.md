@@ -116,7 +116,7 @@ Stage 1A test:
 python3 test.py \
   --stage 1 \
   --variant A \
-  --model models/stage1/variantA/run002/best/best_precision_model.zip \
+  --model models/stage1/variantA/run001/best/best_precision_model.zip \
   --success-distance 0.10 \
   --max-steps 150 \
   --episodes 10 \
@@ -168,6 +168,7 @@ python3 train.py \
   --max-steps 200 \
   --timesteps 50000 \
   --step-dt 0.05
+  --early-stop-plateau
 ```
 
 Stage 2A test:
@@ -182,6 +183,7 @@ python3 test.py \
   --episodes 10 \
   --step-dt 0.05 \
   --log-position-every 25
+  
 ```
 
 Stage 2B train:
@@ -195,6 +197,7 @@ python3 train.py \
   --max-steps 200 \
   --timesteps 50000 \
   --step-dt 0.05
+  --early-stop-plateau
 ```
 
 Stage 2B test:
