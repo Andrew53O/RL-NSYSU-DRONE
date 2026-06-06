@@ -22,13 +22,13 @@ same curriculum as Part 3+Y:
 
 | Stage | Variant | Purpose | Target Setup | Sonar |
 | --- | --- | --- | --- | --- |
-| 1 | A | Fixed altitude control | fixed target `(0, 0, 1.2)` so the policy first learns stable takeoff and vertical stopping | masked |
-| 1 | B | Random altitude control | random `z in [0.7, 1.8]` with `x = 0`, `y = 0` to generalize vertical control | masked |
-| 2 | A | Fixed forward/backward x movement | fixed target `(1, 0, 0.8)` to add horizontal x translation after altitude control | masked |
-| 2 | B | Random x movement | random `x in [-1, 2]` with fixed `y = 0`, `z = 0.8` | masked |
-| 3 | A | Fixed sideways y movement | fixed target `(0, 1, 0.8)` to teach lateral motion in the Gazebo y direction | masked |
-| 3 | B | Random y movement | random `y in [-1.5, 1.5]` with fixed `x = 0`, `z = 0.8` | masked |
-| 4 | A | Random single-target 3D navigation | one random target with `x,y in [-1, 1]`, `z in [0.5, 2.0]` | masked |
+| 1 | A | Fixed altitude control | fixed target `(0, 0, 1.0)` so the policy first learns stable takeoff and vertical stopping | masked |
+| 1 | B | Random altitude control | random `z in [0.8, 1.5]` with `x = 0`, `y = 0` to generalize vertical control | masked |
+| 2 | A | Fixed forward/backward x movement | fixed target `(1, 0, 1.0)` to add horizontal x translation at the Stage 5 mission height | masked |
+| 2 | B | Random x movement | random `x in [-1.0, 1.5]` with fixed `y = 0`, `z = 1.0` | masked |
+| 3 | A | Fixed sideways y movement | fixed target `(0, 1, 1.0)` to teach lateral motion at the Stage 5 mission height | masked |
+| 3 | B | Random y movement | random `y in [-1.0, 1.0]` with fixed `x = 0`, `z = 1.0` | masked |
+| 4 | A | Random single-target 3D navigation | one random target with `x,y in [-1.0, 1.0]`, `z in [0.8, 1.5]` | masked |
 | 4 | B | Sequential 3D navigation | three random x/y/z targets using the same range as Stage 4A | masked |
 | 5 | A | Fixed one-obstacle sonar mission | final mission goal `(10, 0, 1)` with one obstacle world and active sonar observations | active |
 | 5 | B | Random radial one-obstacle mission | final mission goal `(X, Y, 1)` sampled on a radius-10 circle, with the env generating a midpoint cone | active |
