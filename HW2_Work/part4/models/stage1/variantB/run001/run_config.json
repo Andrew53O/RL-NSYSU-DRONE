@@ -1,10 +1,16 @@
 {
-  "created_at_utc": "2026-05-30T03:47:11.271135+00:00",
-  "max_steps": 800,
-  "notes": "Sonar observation fields are masked before Stage 4.",
+  "created_at_utc": "2026-06-05T09:11:55.059625+00:00",
+  "early_stop_plateau": {
+    "enabled": false,
+    "min_delta": 1.0,
+    "patience": 30,
+    "window": 30
+  },
+  "max_steps": 150,
+  "notes": "Sonar observation fields are masked before Stage 5.",
   "outputs": {
-    "log_dir": "/workspace/HW2_Work/part3/logs/stage1/variantB/run001",
-    "model_dir": "/workspace/HW2_Work/part3/models/stage1/variantB/run001"
+    "log_dir": "/workspace/HW2_Work/part4/logs/stage1/variantB/run001",
+    "model_dir": "/workspace/HW2_Work/part4/models/stage1/variantB/run001"
   },
   "ppo": {
     "batch_size": 64,
@@ -19,8 +25,9 @@
   "smoke": false,
   "stage": 1,
   "stage_spec": "stage1B_random_vertical",
-  "success_distance": 0.05,
+  "step_dt": 0.05,
+  "success_distance": 0.1,
   "target_override": null,
-  "timesteps": 30000,
+  "timesteps": 50000,
   "variant": "B"
 }
