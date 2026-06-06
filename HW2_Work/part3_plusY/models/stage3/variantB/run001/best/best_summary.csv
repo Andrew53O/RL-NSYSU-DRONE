@@ -1,0 +1,17 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
+1,800,-487.034258,timeout,-487.034258,0.0,0.6580208539962769,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+2,847,83.196128,success,-201.91906500000002,0.5,0.14704746007919312,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+5,3094,-286.344085,success,-331.8283782,0.4,0.1454220563173294,0,best_precision_model
+7,3143,81.464751,success,-213.6200777142857,0.5714285714285714,0.1492690145969391,0,best_success_model
+8,3674,-175.994406,success,-208.91686875,0.625,0.1304323822259903,0,best_success_model+best_precision_model
+11,4896,79.561369,success,-195.12027536363638,0.6363636363636364,0.12260327488183975,0,best_average_model+best_success_model+best_precision_model
+12,5367,-137.746459,success,-190.339124,0.6666666666666666,0.13681499660015106,0,best_average_model+best_success_model
+13,5830,-124.936322,success,-185.30813923076923,0.6923076923076923,0.14602607488632202,0,best_average_model+best_success_model
+14,5878,79.27099,success,-166.40963000000002,0.7142857142857143,0.13797548413276672,0,best_average_model+best_success_model
+15,5893,80.450617,success,-149.95228020000002,0.7333333333333333,0.14598162472248077,0,best_average_model+best_success_model
+16,5943,79.00049,success,-135.64273206250002,0.75,0.12809543311595917,0,best_average_model+best_success_model
+17,5971,81.312073,success,-122.88068470588236,0.7647058823529411,0.1429063081741333,0,best_average_model+best_success_model
+18,5972,84.623273,success,-111.35268705555558,0.7777777777777778,0.03922537714242935,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+19,5990,80.932644,success,-101.23240647368422,0.7894736842105263,0.14499911665916443,0,best_average_model+best_success_model
+20,6070,71.437588,success,-92.59890675000001,0.8,0.14970538020133972,0,best_average_model+best_success_model
+21,6439,-76.395852,success,-72.06698645000002,0.85,0.14373774826526642,0,best_average_model+best_success_model

@@ -1,0 +1,6 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
+1,270,-121.296685,success,-121.296685,1.0,0.07853421568870544,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+2,446,-68.647369,success,-94.972027,1.0,0.0977596864104271,0,best_episode_model+best_average_model
+3,684,-80.004475,success,-89.982843,1.0,0.0969104915857315,0,best_average_model
+5,1034,11.363422,success,-76.095355,1.0,0.09560694545507431,0,best_episode_model+best_average_model
+6,1056,69.237262,success,-51.87325216666667,1.0,0.0969725027680397,0,best_episode_model+best_average_model

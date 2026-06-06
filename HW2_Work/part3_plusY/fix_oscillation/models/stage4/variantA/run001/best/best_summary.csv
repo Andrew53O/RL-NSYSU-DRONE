@@ -1,0 +1,10 @@
+episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
+1,800,-501.623311,timeout,-501.623311,0.0,1.117146372795105,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+2,1600,-459.059901,timeout,-480.341606,0.0,0.6534374356269836,0,best_episode_model+best_average_model+best_precision_model
+4,3200,-458.461775,timeout,-485.2757765,0.0,0.5719507336616516,0,best_episode_model+best_precision_model
+5,4000,-481.876693,timeout,-484.59595980000006,0.0,0.5426216125488281,0,best_precision_model
+9,7200,-465.701027,timeout,-479.57379866666673,0.0,0.901536762714386,0,best_average_model
+10,7375,6.807055,success,-430.93571330000003,0.1,0.0730024054646492,0,best_episode_model+best_average_model+best_success_model+best_precision_model
+20,14619,67.550111,success,-421.52293204999995,0.1,0.08853650838136673,0,best_episode_model+best_average_model
+21,15419,-445.512148,timeout,-418.7173739000001,0.1,0.7936211824417114,0,best_average_model
+23,17019,-479.758431,timeout,-416.8009929499999,0.1,0.8203568458557129,0,best_average_model
