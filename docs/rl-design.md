@@ -196,6 +196,8 @@ learning from irrelevant obstacle signals.
 Here, `1.0` means the normalized maximum sonar range, not "1 meter".
 With `max_sonar_range = 10.0`, a normalized value of `1.0` means the beam is
 at the farthest safe reading, so the masked channels look like "nothing nearby".
+The ROS sonar bridge defaults are `sonar_min_range = 0.02` and
+`sonar_max_range = 10.0`.
 
 When sonar is active in Stage 5:
 

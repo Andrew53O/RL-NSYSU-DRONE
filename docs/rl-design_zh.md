@@ -184,6 +184,8 @@ sonar_enabled  = 0.0
 這裡的 `1.0` 代表的是正規化後的最大 sonar 距離，不是「1 公尺」。
 因為 `max_sonar_range = 10.0`，所以 `1.0` 表示該方向已經在最遠的安全讀值，
 也就是 masked 後讓模型看到「附近沒有障礙物」。
+ROS sonar bridge 的預設範圍是 `sonar_min_range = 0.02` 和
+`sonar_max_range = 10.0`。
 
 當 Stage 5 啟用 sonar 時：
 
