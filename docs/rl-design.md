@@ -314,6 +314,22 @@ main obstacle-avoidance mechanism.
 The filter outcome is logged as `action_was_filtered`. When the filter
 intervenes, the reward is also reduced by `0.25`.
 
+This extra `0.25` is the safety-filter penalty. It is a small punishment for
+commands that were unsafe enough to need correction. The goal is to teach the
+policy to avoid unsafe actions by itself, instead of depending on the filter to
+fix them every time.
+
+Example:
+
+- raw PPO action: `[0.5, 0.0, -0.1]`
+- sonar detects a close obstacle in front
+- filtered action: `[0.0, 0.0, 0.1]`
+- safety-filter penalty: `-0.25`
+
+In this case, the environment blocked forward motion and added a small climb
+command to reduce collision risk, so the policy receives the extra penalty for
+needing that correction.
+
 ### Filtered Action
 
 `filtered_action` is the final action after the safety filter modifies the raw

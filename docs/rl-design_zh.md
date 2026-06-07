@@ -297,6 +297,20 @@ vz_cmd in [-0.5, 0.5]
 
 濾波結果會記錄在 `action_was_filtered`。一旦濾波器介入，reward 還會額外減少 `0.25`。
 
+這個額外的 `0.25` 就是 safety-filter penalty。它是在懲罰那些太危險、需要濾波器
+幫忙修正的動作。目的就是要讓 policy 自己學會避開不安全的動作，而不是一直依賴
+濾波器去幫它補救。
+
+例子：
+
+- PPO 原始動作：`[0.5, 0.0, -0.1]`
+- sonar 偵測到前方有很近的障礙物
+- filtered action：`[0.0, 0.0, 0.1]`
+- safety-filter penalty：`-0.25`
+
+在這個例子中，環境會阻止前進，並加上一點上升動作來降低碰撞風險，所以 policy
+會因為這次需要被修正而多扣一個 penalty。
+
 ### Filtered Action
 
 `filtered_action` 是安全濾波器改過之後的最後動作。環境會把 `filtered_action`
