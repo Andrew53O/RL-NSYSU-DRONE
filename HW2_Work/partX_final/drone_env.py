@@ -242,6 +242,7 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
 }
 
 
+# check stage 
 def get_stage_spec(stage: int, variant: str) -> StageSpec:
     variant = variant.upper()
     if variant not in ("A", "B"):
@@ -1054,7 +1055,7 @@ class DroneCurriculumEnv(gym.Env):
         delta = target - pose
         distance = float(np.linalg.norm(delta)) if np.all(np.isfinite(delta)) else math.nan
 
-        sonar = self._safe_sonar_ranges()
+        sonar = self._safe_sonar_ranges() # make sure all sonar values are valid  
         sonar_norm = np.clip(sonar / self.max_sonar_range, 0.0, 1.0).astype(np.float32)
         prev_sonar_norm = np.clip(self.previous_sonar / self.max_sonar_range, 0.0, 1.0)
         if self.sonar_enabled:
