@@ -1,10 +1,10 @@
 {
-  "created_at_utc": "2026-05-29T17:13:59.004046+00:00",
+  "created_at_utc": "2026-05-29T17:23:45.554680+00:00",
   "max_steps": 800,
   "notes": "Sonar observation fields are masked before Stage 4.",
   "outputs": {
-    "log_dir": "/workspace/HW2_Work/part3/logs/stage1/variantA/run001",
-    "model_dir": "/workspace/HW2_Work/part3/models/stage1/variantA/run001"
+    "log_dir": "/workspace/HW2_Work/part3/logs/stage1/variantA/run002",
+    "model_dir": "/workspace/HW2_Work/part3/models/stage1/variantA/run002"
   },
   "ppo": {
     "batch_size": 64,
@@ -15,7 +15,7 @@
     "policy": "MlpPolicy"
   },
   "resume_from": null,
-  "run_name": "run001",
+  "run_name": "run002",
   "smoke": false,
   "stage": 1,
   "stage_spec": "stage1A_fixed_vertical",
