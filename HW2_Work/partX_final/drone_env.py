@@ -242,15 +242,11 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
 }
 
 
-def normalize_variant(stage: int, variant: str) -> str:
+def get_stage_spec(stage: int, variant: str) -> StageSpec:
     variant = variant.upper()
     if variant not in ("A", "B"):
         raise ValueError("variant must be A or B")
-    return variant
-
-
-def get_stage_spec(stage: int, variant: str) -> StageSpec:
-    key = (stage, normalize_variant(stage, variant))
+    key = (stage, variant)
     if key not in STAGE_SPECS:
         raise ValueError(f"Unsupported stage/variant: stage={stage}, variant={variant}")
     return STAGE_SPECS[key]
@@ -532,7 +528,7 @@ class DroneCurriculumEnv(gym.Env):
             self._owns_rclpy = True
 
         self.stage = int(stage)
-        self.variant = normalize_variant(self.stage, variant)
+        self.variant = variant.upper()
         self.stage_spec = get_stage_spec(self.stage, self.variant)
         self.target_override = target_override
         self.max_steps = int(max_steps)

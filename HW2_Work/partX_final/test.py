@@ -23,7 +23,7 @@ except ImportError as exc:  # pragma: no cover
         'python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas'
     ) from exc
 
-from drone_env import DroneCurriculumEnv, normalize_variant
+from drone_env import DroneCurriculumEnv
 
 
 PART_DIR = Path(__file__).resolve().parent
@@ -175,13 +175,13 @@ def write_csv(path: Path, rows: list[dict[str, float | int | str]]) -> None:
         writer.writerows(rows)
 
 
-def write_config(path: Path, args: argparse.Namespace, csv_path: Path) -> None:
+def write_config(path: Path, args: argparse.Namespace, variant: str, csv_path: Path) -> None:
     config = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "model": str(args.model),
         "csv": str(csv_path),
         "stage": args.stage,
-        "variant": normalize_variant(args.stage, args.variant),
+        "variant": variant,
         "episodes": args.episodes,
         "target_override": list(args.target) if args.target else None,
         "success_distance": args.success_distance,
@@ -232,7 +232,7 @@ def main() -> None:
         raise SystemExit("--step-dt must be greater than 0.0")
     if not args.model.exists():
         raise SystemExit(f"Model not found: {args.model}")
-    variant = normalize_variant(args.stage, args.variant)
+    variant = args.variant.upper()
     csv_path = (
         explicit_eval_path(args.csv, args.overwrite)
         if args.csv
@@ -263,7 +263,7 @@ def main() -> None:
         env.close()
     write_csv(csv_path, rows)
     config_path = csv_path.with_name(f"{csv_path.stem}_config.json")
-    write_config(config_path, args, csv_path)
+    write_config(config_path, args, variant, csv_path)
     summary_path = csv_path.parent / "summary.txt"
     write_summary(summary_path, rows)
     print_summary(rows)

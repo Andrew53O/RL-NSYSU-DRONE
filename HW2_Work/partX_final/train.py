@@ -24,7 +24,7 @@ except ImportError as exc:  # pragma: no cover
         'python3 -m pip install "numpy<2" gymnasium stable-baselines3 matplotlib pandas'
     ) from exc
 
-from drone_env import DroneCurriculumEnv, get_stage_spec, normalize_variant
+from drone_env import DroneCurriculumEnv, get_stage_spec
 
 
 PART_DIR = Path(__file__).resolve().parent
@@ -343,11 +343,19 @@ def build_training_curve(
     return True
 
 
-def write_run_config(path: Path, args: argparse.Namespace, spec_name: str, run_name: str, model_dir: Path, log_dir: Path) -> None:
+def write_run_config(
+    path: Path,
+    args: argparse.Namespace,
+    variant: str,
+    spec_name: str,
+    run_name: str,
+    model_dir: Path,
+    log_dir: Path,
+) -> None:
     config = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "stage": args.stage,
-        "variant": normalize_variant(args.stage, args.variant),
+        "variant": variant,
         "stage_spec": spec_name,
         "run_name": run_name,
         "target_override": list(args.target) if args.target else None,
@@ -402,7 +410,7 @@ def main() -> None:
             "Warning: --step-dt below 0.03 can make training fast but less stable in Gazebo. "
             "Prefer 0.05 for a modest speed-up."
         )
-    variant = normalize_variant(args.stage, args.variant)
+    variant = args.variant.upper()
     spec = get_stage_spec(args.stage, variant)
     total_timesteps = 1_000 if args.smoke else args.timesteps
     effective_n_steps = 256 if args.smoke else args.n_steps
@@ -427,7 +435,7 @@ def main() -> None:
         raise SystemExit("Run outputs already exist. Use --run-name or --overwrite.")
 
     for config_path in config_paths:
-        write_run_config(config_path, args, spec.name, run_name, model_dir, log_dir)
+        write_run_config(config_path, args, variant, spec.name, run_name, model_dir, log_dir)
 
     env = DroneCurriculumEnv(
         stage=args.stage,
