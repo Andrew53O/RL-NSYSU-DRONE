@@ -1,16 +1,10 @@
 {
-  "created_at_utc": "2026-06-06T08:09:48.287932+00:00",
-  "early_stop_plateau": {
-    "enabled": true,
-    "min_delta": 1.0,
-    "patience": 30,
-    "window": 30
-  },
-  "max_steps": 300,
-  "notes": "Part X final fork: resume between stages from best_average_model.zip. Stage 4 target reaching uses anti-oscillation reward shaping and direct success.",
+  "created_at_utc": "2026-05-30T03:47:11.271135+00:00",
+  "max_steps": 800,
+  "notes": "Sonar observation fields are masked before Stage 4.",
   "outputs": {
-    "log_dir": "/workspace/HW2_Work/partX_final/logs/stage1/variantB/run001",
-    "model_dir": "/workspace/HW2_Work/partX_final/models/stage1/variantB/run001"
+    "log_dir": "/workspace/HW2_Work/part3/logs/stage1/variantB/run001",
+    "model_dir": "/workspace/HW2_Work/part3/models/stage1/variantB/run001"
   },
   "ppo": {
     "batch_size": 64,
@@ -20,19 +14,13 @@
     "n_steps": 512,
     "policy": "MlpPolicy"
   },
-  "resume_from": "models/stage1/variantA/run001/best/best_average_model.zip",
-  "reward_penalties": {
-    "action_penalty": 0.03,
-    "action_smoothness_penalty": 0.09,
-    "near_target_action_penalty": 0.3
-  },
+  "resume_from": "models/stage1/variantA/run002/best/best_precision_model.zip",
   "run_name": "run001",
   "smoke": false,
   "stage": 1,
   "stage_spec": "stage1B_random_vertical",
-  "step_dt": 0.05,
-  "success_distance": 0.1,
+  "success_distance": 0.05,
   "target_override": null,
-  "timesteps": 50000,
+  "timesteps": 30000,
   "variant": "B"
 }
