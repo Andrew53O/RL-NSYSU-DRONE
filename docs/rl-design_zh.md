@@ -214,6 +214,18 @@ Stage 1-4 的 `target_progress` 是航點進度：
 target_index / max(total_targets - 1, 1)
 ```
 
+例如在 Stage 4B 中有 3 個 waypoint，所以：
+
+```text
+第一個目標啟用時：0 / 2 = 0.0
+第二個目標啟用時：1 / 2 = 0.5
+第三個目標啟用時：2 / 2 = 1.0
+```
+
+在 Stage 1-4 裡，只有 Stage 4B 會出現這種多航點進度。
+Stage 1A、1B、2A、2B、3A、3B 和 4A 都只有一個 target，所以整個 episode 內
+`target_progress` 都會維持在 `0.0`。
+
 Stage 5 的 active target 是一個會移動的 local subgoal，所以 `target_progress`
 會改成 mission-course 進度：
 

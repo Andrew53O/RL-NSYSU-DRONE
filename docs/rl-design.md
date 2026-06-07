@@ -226,6 +226,18 @@ In Stages 1-4, `target_progress` is waypoint progress:
 target_index / max(total_targets - 1, 1)
 ```
 
+For example, in Stage 4B there are 3 waypoints, so:
+
+```text
+first target active:  0 / 2 = 0.0
+second target active: 1 / 2 = 0.5
+third target active:  2 / 2 = 1.0
+```
+
+Only Stage 4B uses this multi-waypoint progress inside Stages 1-4.
+Stages 1A, 1B, 2A, 2B, 3A, 3B, and 4A each have only one target, so
+`target_progress` stays `0.0` for the whole episode.
+
 In Stage 5, the active target is a moving local subgoal, so
 `target_progress` switches to mission-course progress:
 
