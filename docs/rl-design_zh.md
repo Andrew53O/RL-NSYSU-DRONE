@@ -297,6 +297,21 @@ vz_cmd in [-0.5, 0.5]
 
 濾波結果會記錄在 `action_was_filtered`。一旦濾波器介入，reward 還會額外減少 `0.25`。
 
+### Filtered Action
+
+`filtered_action` 是安全濾波器改過之後的最後動作。環境會把 `filtered_action`
+發布到 `/cmd_vel`，reward 也會用它，而不是原始動作，因為它才是 drone 真正執行的
+指令。
+
+例子：
+
+- PPO 原始動作：`[0.5, 0.0, -0.1]`
+- sonar 偵測到前方有障礙物
+- filtered action：`[0.0, 0.0, 0.1]`
+
+在這個例子中，濾波器會阻止前進，並加上一點上升動作來降低碰撞風險。
+`action_was_filtered` 會變成 `True`，reward 也會再扣掉額外的濾波懲罰。
+
 ## 獎勵函式
 
 reward 是密集且可加總的。簡化後可寫成：

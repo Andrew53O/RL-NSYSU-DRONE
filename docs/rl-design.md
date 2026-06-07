@@ -314,6 +314,23 @@ main obstacle-avoidance mechanism.
 The filter outcome is logged as `action_was_filtered`. When the filter
 intervenes, the reward is also reduced by `0.25`.
 
+### Filtered Action
+
+`filtered_action` is the final action after the safety filter modifies the raw
+PPO output. The environment publishes `filtered_action` to `/cmd_vel`, and the
+reward uses it instead of the raw action because it reflects the command the
+drone actually executed.
+
+Example:
+
+- raw PPO action: `[0.5, 0.0, -0.1]`
+- sonar says there is an obstacle in front
+- filtered action: `[0.0, 0.0, 0.1]`
+
+In this case, the filter blocks forward motion and adds a small climb command
+to reduce collision risk. `action_was_filtered` becomes `True`, and the reward
+also subtracts the extra filter penalty.
+
 ## Reward Function
 
 The reward is dense and additive. A compact view is:
