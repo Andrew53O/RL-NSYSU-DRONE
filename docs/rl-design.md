@@ -38,7 +38,7 @@ The curriculum in `drone_env.py` is:
 
 ```mermaid
 flowchart TD
-  Obs[41-dim observation] --> PPO[PPO policy]
+  Obs[41-dim state] --> PPO[PPO policy]
   PPO --> Act[3-D velocity action]
   Act --> Clip[clip to action space]
   Clip --> Filter[stage 5 safety filter]
@@ -86,9 +86,9 @@ The bridge reads:
 Each reset uses `/reset_world` when available, then publishes `/reset`, lands
 briefly, and publishes `/takeoff` until the drone reaches the takeoff altitude.
 
-## Observation Space
+## State Space
 
-The environment uses a fixed 41-dimensional observation vector:
+The environment uses a fixed 41-dimensional state vector:
 
 ```text
 12 navigation fields
@@ -156,7 +156,7 @@ The four sonar blocks use the same order:
 4. sonar trend values
 
 The range values come from `Range` messages and are sanitized by `_safe_sonar`
-before entering the observation vector.
+before entering the state vector.
 
 ### Sonar Masking
 
@@ -169,7 +169,7 @@ sonar trends   = 0.0
 sonar_enabled  = 0.0
 ```
 
-This keeps the observation shape fixed while preventing early stages from
+This keeps the state shape fixed while preventing early stages from
 learning from irrelevant obstacle signals.
 
 When sonar is active in Stage 5:
@@ -212,7 +212,7 @@ This makes the progress signal meaningful for the long obstacle mission.
 
 - Missing sonar is treated as "no obstacle seen" instead of NaN.
 - The reset logic waits for a valid pose before starting the episode.
-- If the final observation contains non-finite values, the episode terminates
+- If the final state contains non-finite values, the episode terminates
   as `invalid_sensor`.
 
 ## Action Space
@@ -496,7 +496,7 @@ flowchart TD
 ```
 
 The visible target marker still marks the final mission goal. The local target
-is only an internal reward and observation helper.
+is only an internal reward and state helper.
 
 ### Stage 5A
 
@@ -541,7 +541,7 @@ rough edge. If I had to show one final result, Stage 5A is the safer demo.
 
 ## Why This Design Works for the Homework
 
-- The observation shape stays fixed across all stages.
+- The state shape stays fixed across all stages.
 - The action interface never changes.
 - Sonar is masked until the obstacle stages.
 - Stage 1-3 build single-axis control skills before the full 3D task.
