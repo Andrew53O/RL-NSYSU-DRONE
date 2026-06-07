@@ -358,6 +358,20 @@ Stage 5 使用移動中的 local target，因此 reward 也會跟著遠端 missi
 [abs(dx), abs(dy), abs(dz)]
 ```
 
+這代表的是目前 target 的位置誤差，不是 drone 的速度。reward 會再比較前後兩
+步的誤差，所以模型可以看出：這一步到底是往正確的軸前進，還是雖然更接近目標，
+但同時產生了不必要的偏移。
+
+Stage 1 的例子，target 大約在 `(0, 0, 1.0)`：
+
+- 起始位置：`(0.0, 0.0, 0.5)` -> 誤差 `[0.0, 0.0, 0.5]`
+- move A：`(0.2, 0.0, 0.7)` -> 誤差 `[0.2, 0.0, 0.3]`
+- move B：`(0.0, 0.0, 0.7)` -> 誤差 `[0.0, 0.0, 0.3]`
+
+這兩個移動都讓 drone 更接近 target，所以 distance-progress reward 都會是正的。
+但是 move A 多了 `x` 方向的偏移，move B 則只改善 `z`。軸向 progress reward
+可以分辨這個差別，所以 Stage 1 會更明確地鼓勵垂直移動。
+
 再用不同權重來獎勵改善量：
 
 | Focus | `delta = previous_abs_error - current_abs_error` 的權重向量 |

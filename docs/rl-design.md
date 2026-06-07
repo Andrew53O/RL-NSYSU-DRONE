@@ -379,6 +379,23 @@ The environment tracks absolute error on each axis:
 [abs(dx), abs(dy), abs(dz)]
 ```
 
+This is the position error to the current target on each axis, not the drone's
+velocity. The reward then compares the previous and current error so the policy
+can tell whether the drone improved on the intended axis or just drifted while
+still moving closer overall.
+
+Example in Stage 1, where the target is near `(0, 0, 1.0)`:
+
+- start pose: `(0.0, 0.0, 0.5)` -> error `[0.0, 0.0, 0.5]`
+- move A: `(0.2, 0.0, 0.7)` -> error `[0.2, 0.0, 0.3]`
+- move B: `(0.0, 0.0, 0.7)` -> error `[0.0, 0.0, 0.3]`
+
+Both moves reduce the overall Euclidean distance to the target, so both get a
+positive distance-progress reward. But move A also adds sideways `x` error,
+while move B improves only `z`. The axis-specific reward can see that
+difference, so Stage 1 gives cleaner feedback to the vertical skill we want the
+policy to learn first.
+
 It then rewards improvement with stage-specific weights:
 
 | Focus | Weight vector for `delta = previous_abs_error - current_abs_error` |
