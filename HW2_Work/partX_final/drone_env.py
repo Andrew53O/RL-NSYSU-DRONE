@@ -244,10 +244,6 @@ STAGE_SPECS: dict[tuple[int, str], StageSpec] = {
 
 def normalize_variant(stage: int, variant: str) -> str:
     variant = variant.upper()
-    if stage == 5:
-        if variant not in ("A", "B"):
-            raise ValueError("stage 5 variant must be A or B")
-        return variant
     if variant not in ("A", "B"):
         raise ValueError("variant must be A or B")
     return variant
