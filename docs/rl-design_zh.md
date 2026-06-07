@@ -289,6 +289,11 @@ reward =
   - terminal penalties
 ```
 
+這裡的 "terminal" 指的是 RL 裡的 episode 結束狀態。當 drone 進入 terminal state
+時，這一回合就會結束，之後不會再從這一回合拿到更多 future reward。
+在這個環境裡，terminal logic 就是 `step()` 裡用來判斷是否要設成
+`terminated = True` 或 `truncated = True` 的那些檢查。
+
 ### 1. Active target 進度
 
 主要的進度項是：

@@ -305,6 +305,11 @@ reward =
   - terminal penalties
 ```
 
+Here, "terminal" means an episode-ending state in RL. When the drone reaches a
+terminal state, the current episode stops and no more future reward comes from
+that run. In this environment, the terminal logic is the set of checks in
+`step()` that decide whether to set `terminated = True` or `truncated = True`.
+
 ### 1. Active Target Progress
 
 The main progress term is:
