@@ -155,15 +155,29 @@ The seven sonar sectors are always stored in this order:
 front_left, front_center, front_right, front_up, front_down, side_left, side_right
 ```
 
-The four sonar blocks use the same order:
+The four sonar blocks use the same sector order, but each block carries a
+different kind of information:
 
-1. current sonar ranges
-2. sonar risk values
-3. previous sonar ranges
-4. sonar trend values
+| Block | What it means | How to read it |
+| --- | --- | --- |
+| current sonar ranges | the latest measured distance in each sector | smaller means an obstacle or surface is closer right now |
+| sonar risk values | a compressed danger score derived from the current ranges | `0` means safe/far, values near `1` mean very close or risky |
+| previous sonar ranges | the same distances from the previous step | lets the policy remember what the world looked like one action ago |
+| sonar trend values | how the normalized ranges changed from the previous step to the current one | positive means the obstacle is getting closer, negative means it is moving away |
 
-The range values come from `Range` messages and are sanitized by `_safe_sonar`
-before entering the state vector.
+The current and previous range values come from `Range` messages and are
+sanitized by `_safe_sonar` before entering the state vector. Missing or invalid
+readings fall back to the maximum safe range, so the policy sees "nothing
+nearby" instead of NaN.
+
+In practice, these four blocks work together like this:
+
+- current ranges tell the drone what is nearby now
+- risk values turn that geometry into a simple danger signal
+- previous ranges give the policy a one-step memory
+- trend values tell the policy whether the situation is tightening or opening
+
+That combination is more useful than any single sonar view on its own.
 
 ### Sonar Masking
 

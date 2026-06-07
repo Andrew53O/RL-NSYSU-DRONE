@@ -147,14 +147,26 @@ Stage 5 的 mission goal 比前面短距離課程遠很多，所以需要更大�
 front_left, front_center, front_right, front_up, front_down, side_left, side_right
 ```
 
-四組 sonar 區塊都使用相同順序：
+四組 sonar 區塊都使用相同順序，但每一組代表的資訊不同：
 
-1. 目前的 sonar ranges
-2. sonar risk values
-3. 前一次 sonar ranges
-4. sonar trend values
+| 區塊 | 意義 | 如何理解 |
+| --- | --- | --- |
+| current sonar ranges | 每個方向目前量到的距離 | 數值越小，代表障礙物或牆面離 drone 越近 |
+| sonar risk values | 由 current ranges 壓縮出的危險分數 | `0` 代表安全或很遠，越接近 `1` 代表越危險 |
+| previous sonar ranges | 前一步量到的距離 | 讓策略保留一步記憶，知道上一個 action 前世界長什麼樣子 |
+| sonar trend values | 目前與前一步 normalized range 的變化量 | 正值代表障礙物更靠近，負值代表障礙物遠離 |
 
-這些 range 值來自 `Range` 訊息，並在進入狀態向量前先經過 `_safe_sonar` 清理。
+這些 range 值都來自 `Range` 訊息，進入 state vector 之前會先經過 `_safe_sonar` 清理。
+如果讀值缺失或不合法，系統會回退到最大安全距離，讓策略看到的是「附近沒有障礙物」，而不是 NaN。
+
+實際上，這四組資訊是一起看的：
+
+- current ranges 告訴 drone 現在附近有什麼
+- risk values 把幾何距離壓縮成簡單的危險訊號
+- previous ranges 提供一步記憶
+- trend values 告訴策略空間是在變窄還是變寬
+
+這樣的組合比單看一組 sonar 資訊更有用。
 
 ### Sonar 遮罩
 
