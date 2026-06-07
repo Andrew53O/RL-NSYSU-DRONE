@@ -1,0 +1,38 @@
+{
+  "created_at_utc": "2026-06-06T15:58:28.345557+00:00",
+  "early_stop_plateau": {
+    "enabled": true,
+    "min_delta": 1.0,
+    "patience": 30,
+    "window": 30
+  },
+  "max_steps": 1000,
+  "notes": "Part X final fork: resume between stages from best_average_model.zip. Stage 4 target reaching uses anti-oscillation reward shaping and direct success.",
+  "outputs": {
+    "log_dir": "/workspace/HW2_Work/partX_final/logs/stage5/variantA/run005",
+    "model_dir": "/workspace/HW2_Work/partX_final/models/stage5/variantA/run005"
+  },
+  "ppo": {
+    "batch_size": 64,
+    "device": "cpu",
+    "gamma": 0.99,
+    "learning_rate": 0.0003,
+    "n_steps": 512,
+    "policy": "MlpPolicy"
+  },
+  "resume_from": "models/stage4/variantB/run002/best/best_average_model.zip",
+  "reward_penalties": {
+    "action_penalty": 0.03,
+    "action_smoothness_penalty": 0.09,
+    "near_target_action_penalty": 0.3
+  },
+  "run_name": "run005",
+  "smoke": false,
+  "stage": 5,
+  "stage_spec": "stage5_single_obstacle",
+  "step_dt": 0.05,
+  "success_distance": 0.1,
+  "target_override": null,
+  "timesteps": 50000,
+  "variant": "A"
+}
