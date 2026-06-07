@@ -9,6 +9,7 @@ This folder contains all the homework parts for NSYSU Drone RL HW2.
 | `part1/` | Homework Part 1 |
 | `part2/` | Failed attempt. It uses a 60+ observation space and did not work well. |
 | `part3/` | The submitted homework for Tronclass |
+| `part3_plusY/` | Copy of `part3` with one extra y-axis learning stage added |
 | `part4/` | Failed fork of `part3/`. I copied `part3` and changed `drone_env.py` to make the flight less wavy. |
 | `partX_final/` | The last try for the final presentation. This is the best case in this repo. |
 
@@ -76,6 +77,7 @@ So the final folder is the strongest version overall, but `Stage 5B` still needs
 HW2_Work/part1/
 HW2_Work/part2/
 HW2_Work/part3/
+HW2_Work/part3_plusY/
 HW2_Work/part4/
 HW2_Work/partX_final/
 ```
