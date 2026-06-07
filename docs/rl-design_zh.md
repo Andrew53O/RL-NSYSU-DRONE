@@ -233,6 +233,23 @@ Stage 5 的 active target 是一個會移動的 local subgoal，所以 `target_p
 clip((mission_distance_start - mission_distance_for_progress) / mission_distance_start, 0, 1)
 ```
 
+這裡：
+
+- `mission_distance_start` 是 reset 時，起點到最後 mission goal 的距離
+- `mission_distance_for_progress` 是目前 drone 到最後 mission goal 的距離
+- `clip(..., 0, 1)` 會把數值限制在 `0.0` 到 `1.0` 之間
+
+例子：
+
+- `mission_distance_start = 10`
+- `mission_distance_for_progress = 7`
+
+```text
+(10 - 7) / 10 = 3 / 10 = 0.3
+```
+
+所以 `target_progress = 0.3`，表示 drone 已經完成了 30% 的 mission 距離。
+
 這樣進度訊號才對長距離避障任務有意義。
 
 ### 狀態安全說明

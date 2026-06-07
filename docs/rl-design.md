@@ -245,6 +245,24 @@ In Stage 5, the active target is a moving local subgoal, so
 clip((mission_distance_start - mission_distance_for_progress) / mission_distance_start, 0, 1)
 ```
 
+Here:
+
+- `mission_distance_start` is the distance from the start pose to the final mission goal at reset
+- `mission_distance_for_progress` is the current distance from the drone to that final mission goal
+- `clip(..., 0, 1)` keeps the value inside the range `0.0` to `1.0`
+
+Example:
+
+- `mission_distance_start = 10`
+- `mission_distance_for_progress = 7`
+
+```text
+(10 - 7) / 10 = 3 / 10 = 0.3
+```
+
+So `target_progress = 0.3`, which means the drone has completed 30% of the
+mission distance.
+
 This makes the progress signal meaningful for the long obstacle mission.
 
 ### Observation Safety Notes
