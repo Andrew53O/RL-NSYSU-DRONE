@@ -850,7 +850,9 @@ class DroneCurriculumEnv(gym.Env):
     def _update_stage_obstacle(self) -> None:
         if self.stage == 5 and self.ros.pose is not None:
             if self.variant == "B":
-                self.ros.spawn_generated_cones(self._sample_stage5b_cones())
+                
+                self.ros.clear_generated_obstacle()
+                #self.ros.spawn_generated_cones(self._sample_stage5b_cones())
             else:
                 # Stage 5A stays the simple bridge task: one cone halfway
                 # between takeoff position and the fixed forward goal.
