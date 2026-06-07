@@ -123,6 +123,13 @@ dtype = float32
 | 11 | `target_progress` | 見下方 | 目前階段的進度 |
 | 12 | `total_targets` | `len(targets) / 3.0` | 序列長度提示 |
 
+這些公式使用的原始尺度常數如下：
+
+| 常數 | 數值 | 適用範圍 |
+| --- | --- | --- |
+| `xy_limit` | Stage 1-4 為 `8.0`，Stage 5 為 `12.0` | 用來正規化 `x` 和 `y` |
+| `max_altitude` | `5.0` | 用來正規化 `z` |
+
 不同階段的正規化常數如下：
 
 | 階段範圍 | `dx_norm` | `dy_norm` | `distance_norm` |

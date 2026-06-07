@@ -130,6 +130,13 @@ The first 12 values are:
 | 11 | `target_progress` | see below | progress along the current stage |
 | 12 | `total_targets` | `len(targets) / 3.0` | sequence-length hint |
 
+The raw scale constants used by these formulas are:
+
+| Constant | Value | Where it applies |
+| --- | --- | --- |
+| `xy_limit` | `8.0` in Stage 1-4, `12.0` in Stage 5 | normalizes `x` and `y` |
+| `max_altitude` | `5.0` | normalizes `z` |
+
 The normalization constants change by stage:
 
 | Stage range | `dx_norm` | `dy_norm` | `distance_norm` |
