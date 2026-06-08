@@ -1051,7 +1051,7 @@ class DroneCurriculumEnv(gym.Env):
         if pose is None:
             pose = np.full(3, np.nan, dtype=np.float32)
         velocity = self.ros.velocity.astype(np.float32)
-        target = self.current_target
+        target = self.current_target # stage 5 will use it's moving local target, but success is still checked against the final mission goal
         delta = target - pose
         distance = float(np.linalg.norm(delta)) if np.all(np.isfinite(delta)) else math.nan
 

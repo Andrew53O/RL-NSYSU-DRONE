@@ -7,38 +7,20 @@ CONTAINER_NAME="${CONTAINER_NAME:-nsysu_drone_vnc}"
 GPU_ID="${GPU_ID:-0}"
 VNC_PORT="${VNC_PORT:-5901}"
 
-# Snap-packaged shells can leak GTK/XDG paths that confuse system terminal
-# wrappers, so launch the GUI terminal from a mostly clean environment.
-clean_gui_env() {
-    local -a env_args=(
-        HOME="${HOME:-/home/${USER:-surya}}"
-        PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        USER="${USER:-$(id -un)}"
-        LOGNAME="${LOGNAME:-${USER:-$(id -un)}}"
-        SHELL="${SHELL:-/bin/bash}"
-        DISPLAY="${DISPLAY:-:0}"
-        XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-        DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-}"
-        XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share/:/usr/share/:/usr/share/gnome/:/usr/share/ubuntu/}"
-        XDG_CONFIG_DIRS="${XDG_CONFIG_DIRS:-/etc/xdg:/etc/xdg/xdg-ubuntu}"
-        DESKTOP_SESSION="${DESKTOP_SESSION:-ubuntu}"
-        XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-ubuntu:GNOME}"
-        LANG="${LANG:-C.UTF-8}"
-    )
-
-    if [[ -n "${XAUTHORITY:-}" ]]; then
-        env_args+=(XAUTHORITY="${XAUTHORITY}")
-    fi
-
-    if [[ -n "${LC_ALL:-}" ]]; then
-        env_args+=(LC_ALL="${LC_ALL}")
-    fi
-
-    if [[ -n "${TERM:-}" ]]; then
-        env_args+=(TERM="${TERM}")
-    fi
-
-    env -i "${env_args[@]}"
+# Snap-packaged shells can leak environment variables that confuse system
+# terminal wrappers, so launch the GUI terminal with a cleaned environment.
+unset_snap_env() {
+    env \
+        -u SNAP \
+        -u SNAP_NAME \
+        -u SNAP_INSTANCE_NAME \
+        -u SNAP_REVISION \
+        -u SNAP_ARCH \
+        -u SNAP_COMMON \
+        -u SNAP_DATA \
+        -u SNAP_USER_COMMON \
+        -u SNAP_USER_DATA \
+        "$@"
 }
 
 launch_terminal() {
@@ -47,10 +29,10 @@ launch_terminal() {
 
     case "${terminal}" in
         gnome-terminal)
-            clean_gui_env "${terminal}" -- "$@"
+            unset_snap_env "${terminal}" -- "$@"
             ;;
         *)
-            clean_gui_env "${terminal}" -e "$@"
+            unset_snap_env "${terminal}" -e "$@"
             ;;
     esac
 }

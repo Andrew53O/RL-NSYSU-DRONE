@@ -1,0 +1,14 @@
+episodes: 10
+success_rate: 0.900
+timeout_rate: 0.100
+crash_or_unsafe_rate: 0.000
+average_return: 62.900
+average_distance_to_target: 0.234
+average_mission_goal_distance: 0.351
+average_steps_to_target: 324.556
+average_sequence_completion_rate: 0.600
+average_cmd_vx: -0.010
+average_cmd_vy: 0.059
+average_cmd_vz: 0.021
+safety_filter_activation_count: 0
+sonar_near_miss_count: 0
