@@ -1,2 +1,0 @@
-episode,timesteps,reward,status,recent_average_reward,recent_success_rate,distance_to_target,targets_reached,saved
-1,1000,-546.15626,timeout,-546.15626,0.0,0.6909622550010681,0,best_average_model
